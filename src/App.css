@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+/* If you need to extend your theme, do it here: */
+@theme {
+  --color-brand-primary: #123456;
+}
+
+/* --- Custom Scrollbar for Dark Mode --- */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #020617; /* Slate 950 */
+}
+::-webkit-scrollbar-thumb {
+  background: #334155; /* Slate 700 */
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #eab308; /* Yellow 500 */
+}
+
+/* --- Hide Up/Down Arrows inside the Amount Input --- */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* for admin */
+.overflow-x-auto {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 #020617;
+}
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: .8;
+    transform: scale(0.98);
+  }
+}
+.animate-pulse {
+  animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
