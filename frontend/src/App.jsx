@@ -39,12 +39,13 @@ export default function Pay2PayExchange() {
   const [copiedField, setCopiedField] = useState('');
   const [pendingView, setPendingView] = useState(null);
 
-  // 🔄 Real Database States
+  
   const [userInfo, setUserInfo] = useState({
     id: null,
     name: "User Account",
     phone: "Click login profile to sync",
     avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
+    profile_photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
     status: "Active"
   });
   const [userTransactions, setUserTransactions] = useState([]);
@@ -61,19 +62,22 @@ export default function Pay2PayExchange() {
     'TrueMoney': { name: "Ko Sai Naing", phone: "09666123456", qr: "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=TrueMoney_09666123456", color: "text-orange-600" }
   };
 
-  // 🔄 Database API Fetcher (ခေါ်ယူအသုံးပြုရန် သီးသန့်ထုတ်ထားပါသည်)
+  // 🔄 Database API Fetcher
   const fetchDatabaseRecords = async (targetId) => {
     if (!targetId) return;
     try {
       const response = await fetch(`http://localhost:5000/api/user-node/${targetId}`);
       const data = await response.json();
       if (response.ok) {
+     
+        const photoUrl = data.userInfo.profile_photo || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80";
         setUserInfo({
           id: data.userInfo.id,
           name: data.userInfo.name,
           phone: data.userInfo.phone,
           email: data.userInfo.email,
-          avatar: data.userInfo.profile_photo || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
+          avatar: photoUrl,
+          profile_photo: photoUrl,
           status: data.userInfo.status
         });
         setUserTransactions(data.userTransactions);
@@ -83,16 +87,28 @@ export default function Pay2PayExchange() {
     }
   };
 
-  // 📝 Profile Update စာရင်းကို API ဆီပို့ပြီး Database တွင် အလိုအလျောက်သိမ်းဆည်းရန်
+  
   const handleUpdateUserInfo = async (updatedData) => {
     if (!userInfo.id) return;
     try {
+
+      const newPhoto = updatedData.profile_photo || updatedData.avatar;
+
       const payload = {
         name: updatedData.name,
         phone: updatedData.phone,
         email: updatedData.email,
-        profile_photo: updatedData.profile_photo || updatedData.avatar // Handle matching key
+        profile_photo: newPhoto
       };
+
+      setUserInfo((prev) => ({
+        ...prev,
+        name: updatedData.name,
+        phone: updatedData.phone,
+        email: updatedData.email,
+        avatar: newPhoto,
+        profile_photo: newPhoto
+      }));
 
       const response = await fetch(`http://localhost:5000/api/user-node/update/${userInfo.id}`, {
         method: 'PUT',
@@ -101,10 +117,12 @@ export default function Pay2PayExchange() {
       });
       
       if (response.ok) {
-        fetchDatabaseRecords(userInfo.id); // Database မှ နောက်ဆုံးအခြေအနေကို ပြန်ဆွဲထုတ်ပြီး Sync လုပ်သည်
+        fetchDatabaseRecords(userInfo.id); 
+      } else {
+        alert("Failed to save response to database");
       }
     } catch (err) {
-      alert("Database သို့ ချိတ်ဆက်မှု မအောင်မြင်ပါ။");
+      alert("Connection to database failed");
     }
   };
 
@@ -120,7 +138,6 @@ export default function Pay2PayExchange() {
 
     if (parsedUserData) {
       const userId = parsedUserData.id || parsedUserData._id;
-      // Login အောင်မြင်တာနဲ့ Database ကနေ သက်ဆိုင်ရာ data တွေကို ချက်ချင်းဆွဲတင်လိုက်ပါတယ်
       fetchDatabaseRecords(userId);
     }
 
@@ -142,11 +159,13 @@ export default function Pay2PayExchange() {
 
   const handleLogout = () => {
     setUserRole('guest');
+    const defaultPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80";
     setUserInfo({
       id: null,
       name: "User Account",
       phone: "Click login profile to sync",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
+      avatar: defaultPhoto,
+      profile_photo: defaultPhoto,
       status: "Active"
     });
     setUserTransactions([]);

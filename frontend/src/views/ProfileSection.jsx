@@ -8,7 +8,7 @@ import {
 import html2canvas from 'html2canvas';
 
 export default function ProfileSection({ 
-  userInfo = { id: 1, name: "Kyaw Kyaw", phone: "09123456789", profile_photo: "uploads/default-avatar.png", email: "user@gmail.com" }, 
+  userInfo = { id: 1, name: "Kyaw Kyaw", phone: "09123456789", profile_photo: "/uploads/default-avatar.png", email: "user@gmail.com" }, 
   setUserInfo, 
   userTransactions = [], 
   onLogout 
@@ -49,6 +49,15 @@ export default function ProfileSection({
     }
   ]);
 
+  // Helper function to format image source path securely
+  const formatImgSrc = (src) => {
+    if (!src) return "/uploads/default-avatar.png";
+    if (src.startsWith('data:') || src.startsWith('http://') || src.startsWith('https://')) {
+      return src;
+    }
+    return src.startsWith('/') ? src : `/${src}`;
+  };
+
   // Sync state if userInfo updates from parent/database props
   useEffect(() => {
     setEditName(userInfo.name);
@@ -60,7 +69,6 @@ export default function ProfileSection({
   const handleSaveChanges = async (e) => {
     e.preventDefault();
     if(setUserInfo) {
-      // 💡 FIXED: Real-time update for sidebar profile picture
       setUserInfo({ 
         ...userInfo, 
         name: editName, 
@@ -78,7 +86,7 @@ export default function ProfileSection({
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setTempAvatar(reader.result); // Base64 encoding transformation
+        setTempAvatar(reader.result); // Transform image file into base64 string
       }; 
       reader.readAsDataURL(file);
     }
@@ -121,7 +129,6 @@ export default function ProfileSection({
     }
   };
 
-  // 🔄 Database SQL 'status' Mapper
   const getStatusDetails = (statusCode) => {
     switch (String(statusCode)) {
       case "1":
@@ -194,20 +201,43 @@ export default function ProfileSection({
   return (
     <div className="max-w-6xl mx-auto w-full px-4 py-4 flex flex-col md:grid md:grid-cols-4 gap-6 items-start">
       
-      {/* 📱 MOBILE NAVIGATION BAR */}
-      <div className={`w-full md:hidden rounded-2xl border p-2 flex items-center gap-2 overflow-x-auto shadow-md ${themeClasses.sidebarBg}`}>
-        <button onClick={() => { setActiveTab('profile'); setIsEditing(false); }} className={`shrink-0 py-2 px-4 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${activeTab === 'profile' && !isEditing ? 'bg-amber-500 text-slate-950' : 'opacity-70'}`}><User size={14} /> Dashboard</button>
-        <button onClick={() => { setActiveTab('history'); setIsEditing(false); }} className={`shrink-0 py-2 px-4 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${activeTab === 'history' ? 'bg-amber-500 text-slate-950' : 'opacity-70'}`}><Clock size={14} /> History</button>
-        <button onClick={() => { setActiveTab('support'); setIsEditing(false); }} className={`shrink-0 py-2 px-4 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${activeTab === 'support' ? 'bg-amber-500 text-slate-950' : 'opacity-70'}`}><HelpCircle size={14} /> Support</button>
+      {/* 📱 MOBILE NAVIGATION & QUICK PROFILE BAR */}
+      <div className={`w-full md:hidden rounded-2xl border p-3 flex flex-col space-y-3 shadow-md ${themeClasses.sidebarBg}`}>
+        <div className="flex items-center justify-between pb-2 border-b border-dashed border-slate-700/20">
+          <div className="flex items-center gap-3">
+            <img 
+              src={formatImgSrc(userInfo.profile_photo)} 
+              alt="User Avatar" 
+              className="w-10 h-10 rounded-full object-cover border-2 border-amber-500 p-0.5" 
+              onError={(e) => { e.currentTarget.src = "/uploads/default-avatar.png"; }}
+            />
+            <div>
+              <h3 className={`text-xs font-bold ${themeClasses.textMain}`}>{userInfo.name}</h3>
+              <span className={`text-[10px] font-mono block ${themeClasses.textSub}`}>{userInfo.phone}</span>
+            </div>
+          </div>
+          <button type="button" onClick={() => { setIsEditing(true); setActiveTab('profile'); }} className={`px-2.5 py-1 border rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all ${isEditing ? 'bg-amber-500 text-slate-950 border-amber-500' : `${themeClasses.btnSecondary}`}`}><Pencil size={10} /> Edit</button>
+        </div>
+        
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <button onClick={() => { setActiveTab('profile'); setIsEditing(false); }} className={`shrink-0 py-2 px-4 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${activeTab === 'profile' && !isEditing ? 'bg-amber-500 text-slate-950' : 'opacity-70'}`}><User size={14} /> Dashboard</button>
+          <button onClick={() => { setActiveTab('history'); setIsEditing(false); }} className={`shrink-0 py-2 px-4 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${activeTab === 'history' ? 'bg-amber-500 text-slate-950' : 'opacity-70'}`}><Clock size={14} /> History</button>
+          <button onClick={() => { setActiveTab('support'); setIsEditing(false); }} className={`shrink-0 py-2 px-4 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${activeTab === 'support' ? 'bg-amber-500 text-slate-950' : 'opacity-70'}`}><HelpCircle size={14} /> Support</button>
+        </div>
       </div>
 
       {/* 🧭 DESKTOP CONTROLS SIDEBAR */}
       <div className={`hidden md:flex border rounded-3xl p-5 flex-col space-y-2 shadow-xl backdrop-blur-md w-full ${themeClasses.sidebarBg}`}>
         <div className={`flex flex-col items-center text-center pb-4 border-b ${themeClasses.borderSeparator} mb-3`}>
-          <img src={userInfo.profile_photo} alt="User Node Avatar" className="w-20 h-20 rounded-full object-cover border-2 border-amber-500 p-0.5" />
+          <img 
+            src={formatImgSrc(userInfo.profile_photo)} 
+            alt="User Node Avatar" 
+            className="w-20 h-20 rounded-full object-cover border-2 border-amber-500 p-0.5" 
+            onError={(e) => { e.currentTarget.src = "/uploads/default-avatar.png"; }}
+          />
           <h3 className={`text-sm font-bold max-w-full truncate mt-2 ${themeClasses.textMain}`}>{userInfo.name}</h3>
           <span className={`text-[11px] font-mono block mb-2 ${themeClasses.textSub}`}>{userInfo.phone}</span>
-          <button type="button" onClick={() => setIsEditing(true)} className={`px-3 py-1 border rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all ${isEditing ? 'bg-amber-500 text-slate-950 border-amber-500' : `${themeClasses.btnSecondary}`}`}><Pencil size={10} /> Edit Profile</button>
+          <button type="button" onClick={() => { setIsEditing(true); setActiveTab('profile'); }} className={`px-3 py-1 border rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all ${isEditing ? 'bg-amber-500 text-slate-950 border-amber-500' : `${themeClasses.btnSecondary}`}`}><Pencil size={10} /> Edit Profile</button>
         </div>
         
         <button onClick={() => { setActiveTab('profile'); setIsEditing(false); }} className={`w-full py-2.5 px-4 text-left rounded-xl text-xs font-bold transition flex items-center gap-2.5 ${activeTab === 'profile' && !isEditing ? (isDarkMode ? 'bg-slate-950 text-yellow-400 border border-slate-800' : 'bg-amber-50 text-amber-600') : 'opacity-75'}`}><User size={15} /> Dashboard</button>
@@ -256,7 +286,15 @@ export default function ProfileSection({
                 <h4 className="text-xs font-bold uppercase tracking-wider text-amber-500">Edit Profile Details</h4>
                 <div className={`border p-4 rounded-2xl flex items-center gap-4 ${themeClasses.innerCard}`}>
                   <input type="file" ref={fileInputRef} onChange={handleAvatarChange} accept="image/*" className="hidden" />
-                  <div className="relative cursor-pointer shrink-0" onClick={() => fileInputRef.current.click()}><img src={tempAvatar} className="w-16 h-16 rounded-full object-cover border-2 border-amber-500 p-0.5" alt="Preview" /><div className="absolute inset-0 bg-slate-950/40 rounded-full flex items-center justify-center"><Camera size={14} className="text-white" /></div></div>
+                  <div className="relative cursor-pointer shrink-0" onClick={() => fileInputRef.current.click()}>
+                    <img 
+                      src={formatImgSrc(tempAvatar)} 
+                      className="w-16 h-16 rounded-full object-cover border-2 border-amber-500 p-0.5" 
+                      alt="Preview" 
+                      onError={(e) => { e.currentTarget.src = "/uploads/default-avatar.png"; }}
+                    />
+                    <div className="absolute inset-0 bg-slate-950/40 rounded-full flex items-center justify-center"><Camera size={14} className="text-white" /></div>
+                  </div>
                   <div><span className={`text-xs font-bold block ${themeClasses.textMain}`}>Change Profile Photo</span><span className={`text-[10px] ${themeClasses.textSub}`}>Click photo to upload new image.</span></div>
                 </div>
                 <div className="space-y-3.5">
