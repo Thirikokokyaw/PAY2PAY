@@ -1,0 +1,24 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. TXN-STATUS-ENGINE.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  WS-STATUS-CODE        PIC X(1).
+           88  STATUS-PENDING    VALUE "0".
+           88  STATUS-APPROVED   VALUE "1".
+           88  STATUS-REJECTED   VALUE "2".
+
+       PROCEDURE DIVISION.
+       0000-EVALUATE-STATUS.
+           EVALUATE TRUE
+               WHEN STATUS-PENDING
+                   DISPLAY "LOG|STATUS IS PENDING."
+               WHEN STATUS-APPROVED
+                   DISPLAY "LOG|STATUS IS APPROVED."
+               WHEN STATUS-REJECTED
+                   DISPLAY "LOG|REJECTION SIGNAL FIRED. VOID FUNDS."
+               WHEN OTHER
+                   DISPLAY "LOG|INVALID STATUS BINARY DETECTED."
+           END-EVALUATE.
+           STOP RUN.
+           

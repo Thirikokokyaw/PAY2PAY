@@ -1,0 +1,81 @@
+/* @import "tailwindcss"; */
+
+/* ----------------------------------------------------
+   Custom Scrollbar (choose)
+   Website scrollbar Dark Mode
+   ---------------------------------------------------- */
+/* ::-webkit-scrollbar {
+  width: 8px;
+} */
+
+/* ::-webkit-scrollbar-track {
+  background: #020617; /* bg-slate-950 */
+/* } */ 
+
+/* ::-webkit-scrollbar-thumb {
+  background: #334155; /* bg-slate-700 */
+  /* border-radius: 9999px; */
+/* } */ 
+
+/* ::-webkit-scrollbar-thumb:hover { */
+  /* background: #eab308; bg-yellow-500 */
+/* } */
+
+/* ----------------------------------------------------
+   Input field  Number 
+   ---------------------------------------------------- */
+/* input[type="number"]::-webkit-inner-spin-button, */
+/* input[type="number"]::-webkit-outer-spin-button { */
+  /* -webkit-appearance: none; */
+  /* margin: 0; */
+/* } */
+
+@import "tailwindcss";
+
+/* ----------------------------------------------------
+   Custom Scrollbar
+   Website scrollbar Dark Mode
+   ---------------------------------------------------- */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #020617; /* bg-slate-950 */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155; /* bg-slate-700 */
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #eab308; /* bg-yellow-500 */
+}
+
+/* ----------------------------------------------------
+   Input field Number 
+   ---------------------------------------------------- */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* ----------------------------------------------------
+   Global Navbar Logo Scaling (Super-Sized & Zoomed)
+   ---------------------------------------------------- */
+.nav-logo, 
+img[alt*="Logo"], 
+img[alt*="logo"] {
+  /* Step 1: Give it a huge frame container */
+  width: 5rem !important;   /* Massive container box (~96px) */
+  height: 3rem !important; /* Height box (~72px) */
+  
+  /* Step 2: Zoom past the empty transparency borders of the PNG */
+  transform: scale(1.6) !important; 
+  
+  /* Step 3: Prevent it from cutting off or distorting */
+  object-fit: contain !important;
+  display: inline-block;
+}
