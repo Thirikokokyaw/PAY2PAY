@@ -7,7 +7,7 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [newAdmin, setNewAdmin] = useState({ name: '', email: '', phone: '', password: '', role: 'admin' });
 
-  // Database ဆီမှ Data လှမ်းယူသည့် Function
+  // Database Function
   const fetchAdmins = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
@@ -28,13 +28,12 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
     fetchAdmins(true);
   }, [fetchAdmins]);
 
-  // လက်동 Refresh နှိပ်သည့်စနစ်
   const handleRefresh = () => {
     setIsRefreshing(true);
     fetchAdmins(false);
   };
 
-  // Add လုပ်လိုက်လျှင် Table မှာ တန်းပေါ်စေမည့် အပိုင်း
+  // Add  Table မှာ 
   const handleCreateAdmin = async (e) => {
     e.preventDefault();
     if (!newAdmin.name || !newAdmin.email || !newAdmin.phone || !newAdmin.password) return;
@@ -49,10 +48,9 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
       if (response.ok) {
         const createdAdmin = await response.json();
         
-        // ဘေးက Table မှာ တန်းပေါ်လာအောင် ပြုလုပ်ခြင်း (Live Update)
+        // Live Update
         setAdmins(prev => [createdAdmin, ...prev]);
         
-        // Form ရှင်းထုတ်ခြင်း
         setNewAdmin({ name: '', email: '', phone: '', password: '', role: 'admin' });
       }
     } catch (error) {
@@ -60,7 +58,7 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
     }
   };
 
-  // Revoke စနစ်
+  // Revoke
   const handleRevokeAdmin = async (id) => {
     try {
       const response = await fetch(`http://localhost:5000/api/admins/revoke/${id}`, {
@@ -87,7 +85,7 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
           <h2 className={`text-xl font-extrabold tracking-tight uppercase ${theme.textTitle}`}>Administrative Security Node</h2>
           <p className={`text-xs mt-1 ${theme.textMuted}`}>Provision access tokens and handle internal operations hierarchy roles</p>
         </div>
-        {/* Refresh Button လေး */}
+        {/* Refresh Button */}
         <button 
           onClick={handleRefresh}
           disabled={loading || isRefreshing}

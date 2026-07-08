@@ -201,7 +201,7 @@ export default function ProfileSection({
   return (
     <div className="max-w-6xl mx-auto w-full px-4 py-4 flex flex-col md:grid md:grid-cols-4 gap-6 items-start">
       
-      {/* 📱 MOBILE NAVIGATION & QUICK PROFILE BAR */}
+      {/*  MOBILE NAVIGATION & QUICK PROFILE BAR */}
       <div className={`w-full md:hidden rounded-2xl border p-3 flex flex-col space-y-3 shadow-md ${themeClasses.sidebarBg}`}>
         <div className="flex items-center justify-between pb-2 border-b border-dashed border-slate-700/20">
           <div className="flex items-center gap-3">
@@ -226,7 +226,7 @@ export default function ProfileSection({
         </div>
       </div>
 
-      {/* 🧭 DESKTOP CONTROLS SIDEBAR */}
+      {/* DESKTOP CONTROLS SIDEBAR */}
       <div className={`hidden md:flex border rounded-3xl p-5 flex-col space-y-2 shadow-xl backdrop-blur-md w-full ${themeClasses.sidebarBg}`}>
         <div className={`flex flex-col items-center text-center pb-4 border-b ${themeClasses.borderSeparator} mb-3`}>
           <img 
@@ -247,7 +247,7 @@ export default function ProfileSection({
         <div className={`pt-4 border-t ${themeClasses.borderSeparator} mt-4`}><button onClick={onLogout} className="w-full text-xs bg-rose-500/10 border text-rose-500 py-2.5 rounded-xl transition font-bold flex items-center justify-center gap-2"><LogOut size={14}/> Logout</button></div>
       </div>
 
-      {/* 📊 MAIN INTERACTIVE VIEWPORT */}
+      {/* MAIN INTERACTIVE VIEWPORT */}
       <div className="md:col-span-3 space-y-6 w-full">
         
         {/* UPPER SUMMARY GRID CARDS */}
@@ -313,7 +313,7 @@ export default function ProfileSection({
           </>
         )}
 
-        {/* 📜 HISTORICAL TRANSACTION HISTORY */}
+        {/*  HISTORICAL TRANSACTION HISTORY */}
         {activeTab === 'history' && (
           <div className={`border rounded-3xl p-5 shadow-xl space-y-4 ${themeClasses.cardBg}`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-dashed border-slate-700/20">
@@ -341,7 +341,7 @@ export default function ProfileSection({
           </div>
         )}
 
-        {/* 🛠️ CUSTOM SUPPORT HELPDESK VIEW */}
+        {/*  CUSTOM SUPPORT HELPDESK VIEW */}
         {activeTab === 'support' && (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             <div className={`lg:col-span-3 border rounded-3xl p-5 shadow-xl space-y-4 h-fit ${themeClasses.cardBg}`}>
@@ -406,7 +406,7 @@ export default function ProfileSection({
         )}
       </div>
 
-      {/* 🧾 DOWNLOADABLE VOUCHER MODAL */}
+      {/*  DOWNLOADABLE VOUCHER MODAL */}
       {showVoucher && selectedTxn && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="w-full max-w-sm rounded-3xl shadow-2xl relative overflow-hidden flex flex-col bg-slate-900 border border-slate-800">

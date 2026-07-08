@@ -50,7 +50,7 @@ export default function Pay2PayExchange() {
   });
   const [userTransactions, setUserTransactions] = useState([]);
 
-  // 💡 Check user identity status dynamically to use as isLoggedIn value
+  // Check user identity status dynamically to use as isLoggedIn value
   const isUserLoggedIn = userRole !== 'guest';
 
   const paymentDetails = {
@@ -62,7 +62,7 @@ export default function Pay2PayExchange() {
     'TrueMoney': { name: "Ko Sai Naing", phone: "09666123456", qr: "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=TrueMoney_09666123456", color: "text-orange-600" }
   };
 
-  // 🔄 Database API Fetcher
+  // Database API Fetcher
   const fetchDatabaseRecords = async (targetId) => {
     if (!targetId) return;
     try {

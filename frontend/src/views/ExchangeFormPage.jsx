@@ -6,14 +6,14 @@ import {
 import { ThemeContext } from '../App.jsx';
 import '../App.css';
 
-// 💡 Added 'setUserInfo' into the props destruction layer to prevent runtime crashes
+//  Added 'setUserInfo' into the props destruction layer to prevent runtime crashes
 export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, onRedirectToLogin = () => {} }) {
   const { darkMode } = useContext(ThemeContext);
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // 🛡️ SECURITY LAYER: Route Access Protection
+  //  SECURITY LAYER: Route Access Protection
   useEffect(() => {
     if (!isLoggedIn) {
       onRedirectToLogin();
@@ -33,14 +33,14 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
   const [receiverName, setReceiverName] = useState('');
   const [lastSixDigits, setLastSixDigits] = useState('');
 
-  // 🔄 FETCH REAL-TIME WALLET DATA FROM DATABASE VIA API
+  //  FETCH REAL-TIME WALLET DATA FROM DATABASE VIA API
   const fetchWalletBalances = async () => {
     if (!userInfo?.id) return;
     
     // Turn loading on
     setIsLoading(true); 
 
-    // ─── 🛡️ LIVE USER STATUS CHECK LAYER ───
+    //  LIVE USER STATUS CHECK LAYER ───
     try {
       const res = await fetch(`http://localhost:5000/api/users/${userInfo.id}`);
       
@@ -77,7 +77,7 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
       console.error("Live user status sync failed, bypassing checkpoint:", e);
     }
 
-    // ─── 🔄 ORIGINAL WALLET BALANCES FETCH LOGIC ───
+    // ───  ORIGINAL WALLET BALANCES FETCH LOGIC ───
     try {
       const response = await fetch('http://localhost:5000/api/wallets');
       const data = await response.json();
@@ -103,7 +103,7 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
       setFromWallet('KBZPay');
       setToWallet('WavePay');
     } finally {
-      // 💡 Crucial execution hook: Ensures loading state turns OFF for regular users
+      //  Crucial execution hook: Ensures loading state turns OFF for regular users
       setIsLoading(false); 
     }
   };
@@ -134,7 +134,7 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
   const transferAmount = Number(amount) || 0;
   const netReceivedAmount = transferAmount > 0 ? transferAmount * 0.98 : 0;
 
-  // ─── 🛡️ USER ACCOUNT BLOCKED RETURN STATEMENT ───
+  // ───  USER ACCOUNT BLOCKED RETURN STATEMENT ───
   if (isLoggedIn && userInfo && userInfo.status === 'Blocked') {
     return (
       <div className={`max-w-md mx-auto border rounded-3xl p-8 text-center transition-all ${bgCard} bg-amber-500/5 backdrop-blur-sm animate-fadeIn`}>
@@ -177,7 +177,7 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
     setStep(2);
   };
 
-  // 💾 STEP 3 SUBMISSION HANDLER
+  //  STEP 3 SUBMISSION HANDLER
   const handleExchangeSubmit = async (e) => {
     e.preventDefault();
     
@@ -461,7 +461,7 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
         </form>
       )}
 
-      {/* 🎉 STEP 4: SUCCESS QUEUE CONFIRMATION */}
+      {/*  STEP 4: SUCCESS QUEUE CONFIRMATION */}
       {step === 4 && (
         <div className="text-center py-6 space-y-5">
           <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto border shadow-sm ${darkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' : 'bg-amber-50 text-amber-600 border-amber-200'}`}>

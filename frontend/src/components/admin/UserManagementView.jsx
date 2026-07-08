@@ -5,7 +5,6 @@ export function UserManagementView({ activeView, theme = {}, isDarkMode = false 
   const [users, setUsers] = useState([]);
   const [userSearch, setUserSearch] = useState('');
 
-  // 🔄 Backend မှ Users စာရင်းကို ဆွဲထုတ်ခြင်း
   const fetchUsers = async () => {
     try {
       const response = await fetch('http://localhost:5000/api/admin/users');
@@ -22,7 +21,7 @@ export function UserManagementView({ activeView, theme = {}, isDarkMode = false 
     }
   }, [activeView]);
 
-  // 🛡️ ယာယီ Block / Unblock ပြုလုပ်ခြင်း လုပ်ဆောင်ချက်
+  // Block / Unblock 
   const handleToggleUserStatus = async (userId, currentStatus) => {
     const nextStatus = currentStatus === 'Blocked' ? 'Active' : 'Blocked';
     
@@ -36,16 +35,16 @@ export function UserManagementView({ activeView, theme = {}, isDarkMode = false 
       const data = await response.json();
       if (response.ok) {
         alert("Updated");
-        fetchUsers(); // 💡 Database ပြောင်းပြီးတာနဲ့ User List ကို ချက်ချင်း Live Refresh လုပ်ခြင်း
+        fetchUsers(); 
       } else {
-        alert("❌ " + data.message);
+        alert( data.message);
       }
     } catch (error) {
       alert("Status modification failed.");
     }
   };
 
-  // 🚫 Blacklist Toggle လုပ်ဆောင်ချက် (UI Live Refresh ပါဝင်ပြီး)
+  //  Blacklist Toggle 
   const handleToggleBlacklist = async (userId) => {
     try {
       const response = await fetch(`http://localhost:5000/api/admin/users/${userId}/toggle-blacklist`, {
@@ -58,19 +57,16 @@ export function UserManagementView({ activeView, theme = {}, isDarkMode = false 
       }
 
       const data = await response.json();
-      alert("🛡️ " + data.message);
+      alert( data.message);
       
-      fetchUsers(); // 💡 ဇယားထဲမှာ Blacklisted စာသား ချက်ချင်း Live ပြောင်းသွားစေရန်
+      fetchUsers(); //Blacklisted 
     } catch (error) {
       console.error("Blacklist UI trigger failed:", error);
     }
   };
-
   if (activeView !== 'users') return null;
-
-  // 🔍 Role က 'user' ဖြစ်ပြီး ဖုန်းနံပါတ် ရှာဖွေမှုနှင့် ကိုက်ညီသော စာရင်းကို ကြိုတင် စစ်ထုတ်ထားခြင်း
   const filteredUsers = users.filter((u) => {
-    const matchesRole = u.role === 'user' || !u.role; // role မပါလျှင်လည်း default user ဟု သတ်မှတ်သည်
+    const matchesRole = u.role === 'user' || !u.role; // role  default user 
     const matchesSearch = u.phone && u.phone.includes(userSearch);
     return matchesRole && matchesSearch;
   });
@@ -87,7 +83,7 @@ export function UserManagementView({ activeView, theme = {}, isDarkMode = false 
           </p>
         </div>
 
-        {/* 🔍 Phone Number ရှာဖွေရန် Input Box */}
+        {/*  Phone Number search Input Box */}
         <div className="relative w-full md:w-80">
           <Search size={16} className="absolute left-3.5 top-3 text-slate-400" />
           <input
@@ -100,11 +96,11 @@ export function UserManagementView({ activeView, theme = {}, isDarkMode = false 
         </div>
       </div>
 
-      {/* 📜 Scroll ဆွဲနိုင်ရန် max-h ဖြင့် ထိန်းချုပ်ထားသော ဇယားအပိုင်း */}
+      {/*  Scroll */}
       <div className={`border rounded-2xl overflow-hidden ${theme.tableBg || ''}`}>
         <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
           <table className="w-full text-left text-xs border-collapse min-w-[700px]">
-            {/* 💡 FIXED: Sticky top နှင့်အတူ နောက်ခံ Background Color အသေခံပေးထားသဖြင့် စာသားများ ရောမသွားတော့ပါ */}
+            {/* 💡 FIXED: Sticky top Background Color  */}
             <thead className="sticky top-0 z-10 shadow-sm">
               <tr className={`font-extrabold border-b uppercase tracking-wider ${theme.th || ''} ${isDarkMode ? 'bg-slate-900 text-slate-200' : 'bg-slate-100 text-slate-700'}`}>
                 <th className="p-4">Account Holder Name</th>
@@ -139,7 +135,7 @@ export function UserManagementView({ activeView, theme = {}, isDarkMode = false 
                   </td>
                   <td className="p-4 text-right space-x-2 whitespace-nowrap">
                     
-                    {/* 🚫 Block / Unblock Button */}
+                    {/*  Block / Unblock Button */}
                     <button 
                       onClick={() => handleToggleUserStatus(user.id, user.status)} 
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${user.status === 'Active' ? 'bg-slate-500/10 text-slate-600 border-slate-300 dark:text-slate-300 dark:border-slate-700' : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'}`}
@@ -147,7 +143,7 @@ export function UserManagementView({ activeView, theme = {}, isDarkMode = false 
                       {user.status === 'Active' ? 'Block Access' : 'Unblock Account'}
                     </button>
                     
-                    {/* 🛡️ Blacklist Toggle Button */}
+                    {/*  Blacklist Toggle Button */}
                     <button 
                       onClick={() => handleToggleBlacklist(user.id)} 
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${user.isBlacklisted === 1 ? 'bg-rose-600 text-white border-rose-600 hover:bg-rose-700' : 'bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500/20'}`}
@@ -157,9 +153,7 @@ export function UserManagementView({ activeView, theme = {}, isDarkMode = false 
 
                   </td>
                 </tr>
-              ))}
-              
-              {/* စာရင်းမရှိပါက ပြသပေးမည့် အပိုင်း */}
+              ))}              
               {filteredUsers.length === 0 && (
                 <tr>
                   <td colSpan="5" className="p-8 text-center text-slate-400 font-bold">

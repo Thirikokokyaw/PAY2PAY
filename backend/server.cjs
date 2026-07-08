@@ -38,7 +38,7 @@ const callCobolValidator = (action, name, phone, email, password) => {
 
         exec(`"${cobolPath}" "${args}"`, (error, stdout, stderr) => {
             if (error) {
-                console.error("❌ COBOL Execution Error Detail:", error.message);
+                console.error("COBOL Execution Error Detail:", error.message);
                 reject(`COBOL Execution Error: ${error.message}`);
                 return;
             }
@@ -61,7 +61,7 @@ const callExchangeValidator = (action, amount, txnTail, sender, receiver) => {
 
         exec(`"${cobolPath}" ${args}`, (error, stdout, stderr) => {
             if (error) {
-                console.error("❌ COBOL Exchange Error:", error.message);
+                console.error("COBOL Exchange Error:", error.message);
                 reject(`COBOL Execution Error: ${error.message}`);
                 return;
             }
@@ -74,7 +74,7 @@ const callExchangeValidator = (action, amount, txnTail, sender, receiver) => {
     });
 };
 
-// ─── 🔄 FETCH LIVE WALLET STATUSES & RESERVES ROUTE ───
+// ─── FETCH LIVE WALLET STATUSES & RESERVES ROUTE ───
 app.get('/api/wallets', (req, res) => {
     db.query('SELECT * FROM WALLETS', (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -91,7 +91,7 @@ app.get('/api/wallets', (req, res) => {
     });
 });
 
-// ─── 💸 SUBMIT EXCHANGE TRANSACTION DATA ROUTE (POST Method) ───
+// ───  SUBMIT EXCHANGE TRANSACTION DATA ROUTE (POST Method) ───
 app.post('/api/exchange/submit', async (req, res) => {
     const { fromWallet, toWallet, amount, txnIdTail, senderPhone, receiverPhone, senderName, receiverName, userId } = req.body;
 
@@ -124,7 +124,7 @@ app.post('/api/exchange/submit', async (req, res) => {
 
         db.query(sqlQuery, queryValues, (dbErr, dbResult) => {
             if (dbErr) {
-                console.error("❌ MySQL Insertion Failed:", dbErr);
+                console.error("MySQL Insertion Failed:", dbErr);
                 return res.status(500).json({ success: false, message: "Failed to store inside ledger database table." });
             }
             return res.status(200).json({ 
@@ -182,7 +182,7 @@ app.post('/api/login', (req, res) => {
         const user = results[0];
 
         if (user.isBlacklisted === 1) {
-            return res.status(403).json({ message: "သင့်အကောင့်သည် စနစ်မှ အပြီးပိတ်ပင်ခြင်း (Blacklisted) ခံထားရပါသည်။" });
+            return res.status(403).json({ message: "Blacklisted Account" });
         }
 
         if (user.password !== password) { 
@@ -261,7 +261,7 @@ app.post('/api/tickets/submit', async (req, res) => {
     }
 });
 
-// ─── 🔑 ADMIN TRANSACTION APPROVAL ROUTE ───
+// ───  ADMIN TRANSACTION APPROVAL ROUTE ───
 app.post('/api/admin/approve-transaction', async (req, res) => {
     const { transactionId, amount, txnIdTail, sender, receiver, toWallet } = req.body;
     const cobolPath = path.join(__dirname, 'approve_txn.exe');
@@ -290,7 +290,7 @@ app.post('/api/admin/approve-transaction', async (req, res) => {
     });
 });
 
-// ─── 🔄 DAILY LEDGER REPLENISH ROUTE ───
+// ───  DAILY LEDGER REPLENISH ROUTE ───
 app.post('/api/admin/replenish-wallet', (req, res) => {
     const { walletId, replenishAmount } = req.body;
     const cobolPath = path.join(__dirname, 'daily_replenish.exe');
@@ -337,7 +337,7 @@ app.post('/api/transactions/status-check', (req, res) => {
     });
 });
 
-// ─── 👥 ADMIN USER MANAGEMENT ROUTE ───
+// ───  ADMIN USER MANAGEMENT ROUTE ───
 app.get('/api/admin/users', async (req, res) => {
     const query = `
         SELECT 
@@ -356,7 +356,7 @@ app.get('/api/admin/users', async (req, res) => {
     
     db.query(query, (err, results) => {
         if (err) {
-            console.error("❌ SQL Fetch Error:", err);
+            console.error("SQL Fetch Error:", err);
             return res.status(500).json({ 
                 message: 'Database error fetching users', 
                 error: err.message 
@@ -377,7 +377,7 @@ app.get('/api/admin/users', async (req, res) => {
     });
 });
 
-// ─── 🛠️ FALLBACK HOOK RECONCILIATION ROUTE (Fixes the 404 Error) ───
+// ───  FALLBACK HOOK RECONCILIATION ROUTE (Fixes the 404 Error) ───
 app.put('/api/admin/users/:id/status', (req, res) => {
     const userId = req.params.id;
     const { status } = req.body;
@@ -392,7 +392,7 @@ app.put('/api/admin/users/:id/status', (req, res) => {
     });
 });
 
-// Toggle User Block Status (ယာယီပိတ် / ပြန်ဖွင့်)
+// Toggle User Block Status 
 app.put('/api/admin/users/:id/toggle-block', (req, res) => {
     const userId = req.params.id;
     
@@ -409,7 +409,7 @@ app.put('/api/admin/users/:id/toggle-block', (req, res) => {
     });
 });
 
-// Toggle User Blacklist Status (အပြီးပိတ် / ဖယ်ထုတ်)
+// Toggle User Blacklist Status 
 app.put('/api/admin/users/:id/toggle-blacklist', (req, res) => {
     const userId = req.params.id;
     
@@ -437,7 +437,7 @@ app.put('/api/admin/users/:id/toggle-blacklist', (req, res) => {
     });
 });
 
-// 🔄 Route to check a single user's live status during wallet sync
+//  Route to check a single user's live status during wallet sync
 app.get('/api/users/:id', (req, res) => {
     const userId = req.params.id;
     const query = 'SELECT id, status, isBlacklisted FROM users WHERE id = ?';
@@ -453,8 +453,7 @@ app.get('/api/users/:id', (req, res) => {
     });
 });
 
-// 1️⃣ 🛠️ FIXED: GET USER PROFILE, TRANSACTIONS & COBOL STATS (Refactored to Standard Callback)
-// ==========================================
+//  FIXED: GET USER PROFILE, TRANSACTIONS & COBOL STATS
 app.get('/api/user-node/:id', (req, res) => {
     const userId = req.params.id;
     const exePath = path.join(__dirname, 'cobol', 'get_user_txns.exe');
@@ -511,9 +510,7 @@ app.get('/api/user-node/:id', (req, res) => {
     });
 });
 
-// ==========================================
-// 2️⃣ 🛠️ FIXED: UPDATE USER PROFILE (Refactored to Standard Callback)
-// ==========================================
+// FIXED: UPDATE USER PROFILE (Refactored to Standard Callback)
 app.put('/api/user-node/update/:id', (req, res) => {
     const userId = req.params.id;
     const { name, phone, email, profile_photo } = req.body;
@@ -541,7 +538,7 @@ app.put('/api/user-node/update/:id', (req, res) => {
     });
 });
 
-// ─── 👥 FETCH ALL ADMINS (Fixed to use standard 'db' callback) ───
+//  FETCH ALL ADMINS (Fixed to use standard 'db' callback) ───
 app.get('/api/admins', (req, res) => {
     const query = `
         SELECT id, name, email, phone, role, status, isBlacklisted 
@@ -552,14 +549,14 @@ app.get('/api/admins', (req, res) => {
 
     db.query(query, (err, rows) => {
         if (err) {
-            console.error("❌ SQL Fetch Admin Error:", err.message);
+            console.error("SQL Fetch Admin Error:", err.message);
             return res.status(500).json({ error: err.message });
         }
         res.json(rows);
     });
 });
 
-// ─── ➕ CREATE NEW ADMIN (Fixed & Sends back JSON immediately for Live Update) ───
+// ───  CREATE NEW ADMIN (Fixed & Sends back JSON immediately for Live Update) ───
 app.post('/api/admins', (req, res) => {
     const { name, email, phone, password } = req.body;
 
@@ -574,11 +571,10 @@ app.post('/api/admins', (req, res) => {
 
     db.query(insertQuery, [name, email, phone, password], (insertErr, result) => {
         if (insertErr) {
-            console.error("❌ SQL Insert Admin Error:", insertErr.message);
+            console.error(" SQL Insert Admin Error:", insertErr.message);
             return res.status(500).json({ error: insertErr.message });
         }
 
-        // Insert အောင်မြင်လျှင် React Table ပေါ် ချက်ချင်း Live တန်းပေါ်လာစေရန် Data ပြန်ဆွဲထုတ်ပေးခြင်း
         const selectQuery = "SELECT id, name, email, phone, role, status, isBlacklisted FROM users WHERE id = ?";
         db.query(selectQuery, [result.insertId], (selectErr, rows) => {
             if (selectErr) {
@@ -589,11 +585,10 @@ app.post('/api/admins', (req, res) => {
     });
 });
 
-// ─── 🚫 REVOKE ADMIN PROTOCOL (Fixed & Protects Super Admin) ───
+// ───  REVOKE ADMIN PROTOCOL (Fixed & Protects Super Admin) ───
 app.patch('/api/admins/revoke/:id', (req, res) => {
     const adminId = req.params.id;
 
-    // အဆင့် ၁ - Super Admin ဟုတ်မဟုတ် အရင်စစ်ဆေးခြင်း
     db.query("SELECT email FROM users WHERE id = ?", [adminId], (searchErr, rows) => {
         if (searchErr) return res.status(500).json({ error: searchErr.message });
         if (rows.length === 0) return res.status(404).json({ error: "Admin node not found." });
@@ -601,12 +596,10 @@ app.patch('/api/admins/revoke/:id', (req, res) => {
         if (rows[0].email === 'admin@pay2pay.com') {
             return res.status(403).json({ error: "Action Terminated: Cannot revoke Super Admin Node." });
         }
-
-        // အဆင့် ၂ - ဟုတ်ကဲ့၊ Super Admin မဟုတ်ရင် Status ပြောင်းလဲခြင်း
         const updateQuery = "UPDATE users SET status = 'Revoked', isBlacklisted = 1 WHERE id = ?";
         db.query(updateQuery, [adminId], (updateErr) => {
             if (updateErr) {
-                console.error("❌ SQL Revoke Admin Error:", updateErr.message);
+                console.error(" SQL Revoke Admin Error:", updateErr.message);
                 return res.status(500).json({ error: updateErr.message });
             }
             res.json({ success: true, message: "Operator terminated successfully from server node." });
@@ -614,4 +607,4 @@ app.patch('/api/admins/revoke/:id', (req, res) => {
     });
 });
 
-app.listen(5000, () => console.log('🚀 Server running on port 5000'));
+app.listen(5000, () => console.log('Server running on port 5000'));
