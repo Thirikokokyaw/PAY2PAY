@@ -42,7 +42,6 @@ export default function AuthPage({ onLoginSuccess, onClose }) {
 
     } else {
       // ─── 🛡️ SECURITY LAYER: BLACKLIST & BLOCKED ACCOUNT CHECK ───
-      // မူလ Login Code နေရာတွင် အောက်ပါ စိတ်ချရသော Logic ဖြင့် အစားထိုးလိုက်ပါသည်
       try {
         const response = await fetch('http://localhost:5000/api/login', {
           method: 'POST',
@@ -52,15 +51,15 @@ export default function AuthPage({ onLoginSuccess, onClose }) {
         const data = await response.json();
 
         if (response.ok) {
-          // 💡 Backend မှ ပါလာမည့် status နှင့် isBlacklisted ကိုပါ တစ်ပါတည်း သိမ်းဆည်းရန် 
+          // isBlacklisted 
           onLoginSuccess(data.role, {
             ...data.user,
             status: data.user.status,
             isBlacklisted: data.user.isBlacklisted
           });
         } else {
-          // 💡 COBOL သို့မဟုတ် Backend မှ ပို့လိုက်သော "အပြီးပိတ်ပင်ထားသည်" ဆိုသည့် စာသားကို တိုက်ရိုက်ပြသမည်
-          alert("❌ Login Failed: " + data.message);
+
+          alert("Login Failed: " + data.message);
         }
       } catch (error) {
         alert("Server connection failed.");

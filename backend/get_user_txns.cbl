@@ -3,28 +3,16 @@
        AUTHOR.     LUCIA.
 
        ENVIRONMENT DIVISION.
-       INPUT-OUTPUT SECTION.
-       FILE-CONTROL.
-           SELECT TXN-FILE ASSIGN TO "EXCHANGE_TXN_DATA.DAT"
-             ORGANIZATION IS LINE SEQUENTIAL.
+       CONFIGURATION SECTION.
 
        DATA DIVISION.
-       FILE SECTION.
-       FD  TXN-FILE.
-       01  TXN-RECORD.
-           05  COB-TXN-ID          PIC 9(11).
-           05  COB-USER-ID         PIC 9(11).
-           05  COB-FROM-WALLET     PIC X(10).
-           05  COB-TO-WALLET       PIC X(10).
-           05  COB-SEND-AMOUNT     PIC 9(13)V99.
-           05  COB-RECEIVE-AMOUNT  PIC 9(13)V99.
-           05  COB-STATUS          PIC X(01).      
-           05  COB-CREATED-AT      PIC X(19).      
-
        WORKING-STORAGE SECTION.
        01  SWITCHES.
            05  EOF-SWITCH          PIC X(01) VALUE 'N'.
                88 END-OF-FILE                VALUE 'Y'.
+
+       01  COB-INPUT-DATA.
+           05  COB-STATUS          PIC X(01).
 
        01  COUNTERS-AND-TOTALS.
            05  WS-TOTAL-EXCHANGES  PIC 9(06) VALUE ZERO.
@@ -37,19 +25,17 @@
 
        PROCEDURE DIVISION.
        0000-MAIN-LOGIC.
-           OPEN INPUT TXN-FILE
-           
+      
            PERFORM UNTIL END-OF-FILE
-               READ TXN-FILE
-                   AT END
-                       SET END-OF-FILE TO TRUE
-                   NOT AT END
-                       PERFORM 1000-PROCESS-TRANSACTION
-               END-READ
-           END-PERFORM
+               ACCEPT COB-INPUT-DATA FROM SYSIN
+               
+               IF COB-INPUT-DATA = "E" OR COB-INPUT-DATA = " "
+                   SET END-OF-FILE TO TRUE
+               ELSE
+                   PERFORM 1000-PROCESS-TRANSACTION
+               END-IF
+           END-PERFORM.
 
-           CLOSE TXN-FILE
-           
            MOVE WS-TOTAL-EXCHANGES TO DISP-TOTAL
            MOVE WS-PENDING-COUNT   TO DISP-PENDING
            
@@ -66,4 +52,3 @@
            ELSE IF COB-STATUS = "1"
                ADD 1 TO WS-APPROVED-COUNT
            END-IF.
-           

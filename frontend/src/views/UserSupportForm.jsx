@@ -22,7 +22,7 @@ export default function UserSupportForm({ onSubmitTicket, darkMode }) {
     setTxnNo('');
     setTime('');
     setMessage('');
-    alert("✅ Your support ticket has been submitted to Admin node.");
+    alert("Your support ticket has been submitted to Admin node.");
   };
 
   return (

@@ -1,9 +1,9 @@
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
-// 💡 FIXED: Added execFile to destructuring imports to prevent crashing on /status-check
 const { exec, execFile } = require('child_process');
 const path = require('path');
+const { spawn } = require('child_process'); 
 
 const app = express();
 app.use(cors());
@@ -28,7 +28,7 @@ db.connect((err) => {
     console.log('Connected to XAMPP MySQL Database.');
 });
 
-// 🔐 Helper function to call COBOL Authentication Validator
+//  Helper function to call COBOL Authentication Validator
 const callCobolValidator = (action, name, phone, email, password) => {
     return new Promise((resolve, reject) => {
         const args = `${action},${name || ''},${phone || ''},${email || ''},${password || ''}`;
@@ -456,9 +456,9 @@ app.get('/api/users/:id', (req, res) => {
 //  FIXED: GET USER PROFILE, TRANSACTIONS & COBOL STATS
 app.get('/api/user-node/:id', (req, res) => {
     const userId = req.params.id;
-    const exePath = path.join(__dirname, 'cobol', 'get_user_txns.exe');
+    const exePath = path.join(__dirname, 'get_user_txns.exe');
 
-    // Step 1: Fetch User Profile using standard callback
+    // Step 1: Fetch User Profile
     db.query('SELECT id, name, phone, email, role, profile_photo, created_at, status FROM users WHERE id = ?', [userId], (err, userRows) => {
         if (err) {
             console.error("Database User Query Error:", err);
@@ -468,7 +468,7 @@ app.get('/api/user-node/:id', (req, res) => {
             return res.status(404).json({ error: "User Node not found in database." });
         }
 
-        // Step 2: Fetch User's Transactions using standard callback
+        // Step 2: Fetch User's Transactions
         const txnQuery = `
             SELECT txn_id, from_wallet, to_wallet, send_amount, receive_amount, 
                    txn_id_tail, sender_name, sender_phone, receiver_name, receiver_phone, 
@@ -483,23 +483,47 @@ app.get('/api/user-node/:id', (req, res) => {
                 return res.status(500).json({ error: "Internal Server Database Controller Error" });
             }
 
-            // Step 3: Run COBOL background executable
-            exec(`"${exePath}" ${userId}`, (cobolError, stdout, stderr) => {
+            // ─── 🚀 STEP 3: RUN COBOL VIA STANDARD INPUT/OUTPUT PIPE (NO DAT FILE) ───
+            const cobolProcess = spawn(exePath, [userId], { cwd: __dirname });
+
+            let stdoutData = "";
+            let stderrData = "";
+
+            // COBOL ထံမှ ပြန်ထွက်လာမည့် Output (Display များကို ဖမ်းယူခြင်း)
+            cobolProcess.stdout.on('data', (data) => {
+                stdoutData += data.toString();
+            });
+
+            cobolProcess.stderr.on('data', (data) => {
+                stderrData += data.toString();
+            });
+
+            // ဒေတာဘေ့စ်ထဲက ရလာတဲ့ Status တွေကို COBOL ဆီ တိုက်ရိုက်တွန်းပို့ပေးခြင်း
+            txnRows.forEach(row => {
+                // status တစ်ခုချင်းစီကို စာကြောင်းအသစ်ခံပြီး COBOL ဆီ ပို့ပေးပါတယ် (ဥပမာ "0\n", "1\n")
+                cobolProcess.stdin.write(`${row.status}\n`);
+            });
+
+            // ဒေတာကုန်သွားကြောင်း သိစေရန် "E" (End) ဟု ပို့ပြီး Input Pipe ကို ပိတ်လိုက်ပါတယ်
+            cobolProcess.stdin.write("E\n");
+            cobolProcess.stdin.end();
+
+            // COBOL အလုပ်လုပ်ပြီးသွားချိန်တွင် Response ပြန်ပေးခြင်း
+            cobolProcess.on('close', (code) => {
                 let cobolSummary = { totalExchanges: txnRows.length, pendingCount: 0 };
 
-                if (!cobolError && stdout) {
-                    const totalMatch = stdout.match(/TOTAL EXCHANGES IN DB\s*:\s*(\d+)/);
-                    const pendingMatch = stdout.match(/TOTAL PENDING IN DB\s*:\s*(\d+)/);
+                if (code === 0 && stdoutData) {
+                    const totalMatch = stdoutData.match(/TOTAL EXCHANGES IN DB\s*:\s*(\d+)/);
+                    const pendingMatch = stdoutData.match(/TOTAL PENDING IN DB\s*:\s*(\d+)/);
 
                     cobolSummary = {
                         totalExchanges: totalMatch ? parseInt(totalMatch[1], 10) : txnRows.length,
                         pendingCount: pendingMatch ? parseInt(pendingMatch[1], 10) : 0
                     };
                 } else {
-                    console.error("COBOL Execution Note/Error:", cobolError || stderr);
+                    console.error("COBOL Execution Note/Error:", stderrData || `Exit code: ${code}`);
                 }
 
-                // Response package
                 res.json({
                     userInfo: userRows[0],
                     userTransactions: txnRows,
