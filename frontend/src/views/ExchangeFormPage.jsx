@@ -7,7 +7,7 @@ import { ThemeContext } from '../App.jsx';
 import '../App.css';
 
 //  Added 'setUserInfo' into the props destruction layer to prevent runtime crashes
-export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, onRedirectToLogin = () => {} }) {
+export default function ExchangeFormPage({ isLoggedIn, userInfo, feeRate, setUserInfo, onRedirectToLogin = () => {} }) {
   const { darkMode } = useContext(ThemeContext);
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
@@ -399,7 +399,7 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
                 <Wallet size={12} className={darkMode ? 'text-amber-400' : 'text-amber-600'} /> Premium Ledger
               </span>
               <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border tracking-wider uppercase ${darkMode ? 'text-amber-300 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-100 border-amber-300'}`}>
-                2% Fee Applied
+                {feeRate || 2}% Fee Applied
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2.5 text-center">

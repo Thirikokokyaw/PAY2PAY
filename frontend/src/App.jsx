@@ -40,6 +40,16 @@ export default function Pay2PayExchange() {
   const [pendingView, setPendingView] = useState(null);
 
   
+  const [feeRate, setFeeRate] = useState(2);
+  
+  useEffect(() => {
+    fetch('http://localhost:5000/api/settings') 
+      .then(res => res.json())
+      .then(data => setFeeRate(data.feeRate))
+      .catch(err => console.error(err));
+  }, []);
+
+  
   const [userInfo, setUserInfo] = useState({
     id: null,
     name: "User Account",
@@ -217,12 +227,13 @@ export default function Pay2PayExchange() {
         </button>
 
         <main className={`w-full flex-grow flex flex-col justify-center ${activeView === 'home' ? 'px-0 py-0' : 'max-w-6xl mx-auto px-4 py-8'}`}>
-          {activeView === 'home' && <HomeExchange navigateToView={navigateToView} />}
+          {activeView === 'home' && <HomeExchange navigateToView={navigateToView} feeRate={feeRate} />}
           
           {activeView === 'exchange' && (
             <ExchangeFormPage 
               isLoggedIn={isUserLoggedIn} 
               userInfo={userInfo} 
+              feeRate={feeRate}
               setUserInfo={handleUpdateUserInfo}
               onRedirectToLogin={() => {
                 setPendingView('exchange');

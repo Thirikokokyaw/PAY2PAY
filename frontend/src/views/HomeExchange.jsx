@@ -3,7 +3,7 @@ import { Zap, Shield, Percent, ArrowRight } from 'lucide-react';
 import { ThemeContext } from '../App.jsx';
 import shwedagonImg from '../assets/Shwedagon-Pagoda.jpg';
 
-export default function HomeExchange({ navigateToView }) {
+export default function HomeExchange({ navigateToView , feeRate }) {
   const { darkMode } = useContext(ThemeContext);
 
   return (
@@ -139,7 +139,9 @@ export default function HomeExchange({ navigateToView }) {
               <div className="p-3 bg-emerald-400/10 text-emerald-600 dark:text-emerald-400 rounded-xl w-fit"><Percent size={22} /></div>
               <div>
                 <h4 className={`text-sm font-bold uppercase tracking-wide ${darkMode ? 'text-white' : 'text-slate-800'}`}>Minimal Overhead</h4>
-                <p className={`text-xs mt-2 leading-relaxed ${darkMode ? 'text-slate-200' : 'text-slate-600'}`}>Operating overhead structures are kept strictly flat at 2%, beating traditional offline P2P marketplace rates.</p>
+               <p className={`text-xs mt-2 leading-relaxed ${darkMode ? 'text-slate-200' : 'text-slate-600'}`}>
+                 Operating overhead structures are kept strictly flat at {feeRate || 2}%, beating traditional offline P2P marketplace rates.
+                </p>
               </div>
             </div>
           </div>

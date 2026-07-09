@@ -456,7 +456,7 @@ app.get('/api/users/:id', (req, res) => {
 //  FIXED: GET USER PROFILE, TRANSACTIONS & COBOL STATS
 app.get('/api/user-node/:id', (req, res) => {
     const userId = req.params.id;
-    const exePath = path.join(__dirname, 'cobol', 'get_user_txns.exe');
+   const exePath = path.join(__dirname, 'get_user_txns.exe');
 
     // Step 1: Fetch User Profile using standard callback
     db.query('SELECT id, name, phone, email, role, profile_photo, created_at, status FROM users WHERE id = ?', [userId], (err, userRows) => {
@@ -607,4 +607,82 @@ app.patch('/api/admins/revoke/:id', (req, res) => {
     });
 });
 
+app.get('/api/settings', (req, res) => {
+    db.query('SELECT * FROM system_settings WHERE id = 1', (err, results) => {
+        if (err) {
+            console.error("SQL Fetch Settings Error:", err.message);
+            return res.status(500).json({ error: "Failed to fetch system operational gates." });
+        }
+    
+        if (results.length === 0) {
+            return res.json({
+                feeRate: 1.5,
+                isPlatformOnline: true,
+                maintenanceMessage: "System is under maintenance."
+            });
+        }
+
+        const settings = results[0];    
+        res.json({
+            feeRate: parseFloat(settings.fee_rate),
+            isPlatformOnline: settings.is_platform_online === 'Y',
+            maintenanceMessage: settings.maintenance_message
+        });
+    });
+});
+
+// ─── SYSTEM SETTINGS UPDATE ROUTE (POST) ───
+
+app.post('/api/settings/update', (req, res) => {
+   
+    const { feeRate, isPlatformOnline } = req.body; 
+
+    let updateFields = [];
+    let queryValues = [];
+    let insertColumns = ['id'];
+    let insertValues = [1];
+    let placeholders = ['?'];
+
+    if (feeRate !== undefined) {
+        updateFields.push("fee_rate = ?");
+        queryValues.push(Number(feeRate));
+        
+        insertColumns.push("fee_rate");
+        insertValues.push(Number(feeRate));
+        placeholders.push('?');
+    }
+    
+    if (isPlatformOnline !== undefined) {
+        const onlineState = isPlatformOnline ? 'Y' : 'N';
+        updateFields.push("is_platform_online = ?");
+        queryValues.push(onlineState);
+        
+        insertColumns.push("is_platform_online");
+        insertValues.push(onlineState);
+        placeholders.push('?');
+    }
+    if (updateFields.length === 0) {
+        return res.status(400).json({ error: "No fields provided for update." });
+    }
+
+    const sqlQuery = `
+        INSERT INTO system_settings (${insertColumns.join(', ')})
+        VALUES (${placeholders.join(', ')})
+        ON DUPLICATE KEY UPDATE ${updateFields.join(', ')}
+    `;
+
+    const finalValues = [...insertValues, ...queryValues];
+
+    db.query(sqlQuery, finalValues, (err, result) => {
+        if (err) {
+            console.error("SQL Upsert Error:", err.message);
+            return res.status(500).json({ error: "Internal Server Error inside Database Controller." });
+        }
+        
+        res.status(200).json({ 
+            success: true, 
+            message: "Data Stored Successfully!" 
+        });
+    });
+});
 app.listen(5000, () => console.log('Server running on port 5000'));
