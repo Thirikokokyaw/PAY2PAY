@@ -56,7 +56,7 @@ export default function MaintenanceView({
       }
     } catch (error) {
       console.error("There was an error when updating!", error);
-      alert("Error: Failed to update settings. Please check your backend connection.");
+      alert("Error: Failed to update settings. Please check your backend connection!.");
     } finally {
       setIsSaving(false);
     }
