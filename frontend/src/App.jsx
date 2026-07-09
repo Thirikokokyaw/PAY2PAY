@@ -30,7 +30,7 @@ try {
 }
 
 export default function Pay2PayExchange() {
-  const [darkMode, setDarkMode] = useState(false); // Default to Light Mode
+  const [darkMode, setDarkMode] = useState(false); 
   const [userRole, setUserRole] = useState('guest'); 
   const [activeView, setActiveView] = useState('home'); 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -38,8 +38,33 @@ export default function Pay2PayExchange() {
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [copiedField, setCopiedField] = useState('');
   const [pendingView, setPendingView] = useState(null);
-
   
+  // App-level state configurations
+  const [feeRate, setFeeRate] = useState(2);
+  const [isPlatformOnline, setIsPlatformOnline] = useState('Y');
+
+  // Shared function to pull latest system configurations from DB
+  const fetchSettingsFromDatabase = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/settings');
+      if (res.ok) {
+        const data = await res.json();
+        // Fallback checks matching backend structure
+        if (data.feeRate !== undefined) setFeeRate(data.feeRate);
+        if (data.isPlatformOnline !== undefined) {
+          setIsPlatformOnline(data.isPlatformOnline ? 'Y' : 'N');
+        }
+      }
+    } catch (err) {
+      console.error("Failed synchronization check:", err);
+    }
+  };
+
+  // Initial load auto-fetch configuration
+  useEffect(() => {
+    fetchSettingsFromDatabase();
+  }, []);
+
   const [userInfo, setUserInfo] = useState({
     id: null,
     name: "User Account",
@@ -50,7 +75,6 @@ export default function Pay2PayExchange() {
   });
   const [userTransactions, setUserTransactions] = useState([]);
 
-  // Check user identity status dynamically to use as isLoggedIn value
   const isUserLoggedIn = userRole !== 'guest';
 
   const paymentDetails = {
@@ -62,14 +86,12 @@ export default function Pay2PayExchange() {
     'TrueMoney': { name: "Ko Sai Naing", phone: "09666123456", qr: "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=TrueMoney_09666123456", color: "text-orange-600" }
   };
 
-  // Database API Fetcher
   const fetchDatabaseRecords = async (targetId) => {
     if (!targetId) return;
     try {
       const response = await fetch(`http://localhost:5000/api/user-node/${targetId}`);
       const data = await response.json();
       if (response.ok) {
-     
         const photoUrl = data.userInfo.profile_photo || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80";
         setUserInfo({
           id: data.userInfo.id,
@@ -87,13 +109,10 @@ export default function Pay2PayExchange() {
     }
   };
 
-  
   const handleUpdateUserInfo = async (updatedData) => {
     if (!userInfo.id) return;
     try {
-
       const newPhoto = updatedData.profile_photo || updatedData.avatar;
-
       const payload = {
         name: updatedData.name,
         phone: updatedData.phone,
@@ -135,24 +154,20 @@ export default function Pay2PayExchange() {
   const handleLoginSuccess = (role, parsedUserData) => {
     setUserRole(role);
     setIsAuthOpen(false);
-
     if (parsedUserData) {
       const userId = parsedUserData.id || parsedUserData._id;
       fetchDatabaseRecords(userId);
     }
-
     if (role === 'admin') {
       setPendingView(null);
       setActiveView('admin');
       return;
     }
-
     if (pendingView === 'exchange') {
       setActiveView('exchange');
       setPendingView(null);
       return;
     }
-
     setActiveView('home');
     setPendingView(null);
   };
@@ -182,9 +197,16 @@ export default function Pay2PayExchange() {
     setActiveView(view);
   };
 
+  // Provide state settings into Context layer to enable background syncing
+  const contextValue = { 
+    darkMode, 
+    setDarkMode, 
+    refreshSettings: fetchSettingsFromDatabase 
+  };
+
   if (userRole === 'admin' && activeView === 'admin') {
     return (
-      <ThemeContext.Provider value={{ darkMode, setDarkMode }}>
+      <ThemeContext.Provider value={contextValue}>
         <div className={`min-h-screen ${darkMode ? 'bg-slate-950 text-slate-50' : 'bg-slate-50 text-slate-900'}`}>
           <AdminDashboard onLogout={handleLogout} />
         </div>
@@ -193,7 +215,7 @@ export default function Pay2PayExchange() {
   }
 
   return (
-    <ThemeContext.Provider value={{ darkMode, setDarkMode }}>
+    <ThemeContext.Provider value={contextValue}>
       <div className={`min-h-screen font-sans flex flex-col justify-between transition-colors duration-500 selection:bg-cyan-500/30 ${darkMode ? 'bg-slate-900 text-slate-50' : 'bg-slate-50 text-slate-900'}`}>
         <Navigation 
           activeView={activeView} 
@@ -217,12 +239,13 @@ export default function Pay2PayExchange() {
         </button>
 
         <main className={`w-full flex-grow flex flex-col justify-center ${activeView === 'home' ? 'px-0 py-0' : 'max-w-6xl mx-auto px-4 py-8'}`}>
-          {activeView === 'home' && <HomeExchange navigateToView={navigateToView} />}
+          {activeView === 'home' && <HomeExchange navigateToView={navigateToView} feeRate={feeRate} />}
           
           {activeView === 'exchange' && (
             <ExchangeFormPage 
               isLoggedIn={isUserLoggedIn} 
               userInfo={userInfo} 
+              feeRate={feeRate}
               setUserInfo={handleUpdateUserInfo}
               onRedirectToLogin={() => {
                 setPendingView('exchange');
@@ -237,7 +260,6 @@ export default function Pay2PayExchange() {
           )}
           
           {activeView === 'about' && <About />}
-          
           {activeView === 'help' && <Help />}
           
           {activeView === 'profile' && (
