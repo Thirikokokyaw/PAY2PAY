@@ -458,7 +458,7 @@ app.post('/api/profile/update', async (req, res) => {
 });
 
 // ─── TICKET SUBMIT ROUTE ───
-app.post('/api/tickets/submit', async (req, res) => {
+/*app.post('/api/tickets/submit', async (req, res) => {
     const { fromPay, toPay, txnNo, message } = req.body;
 
     try {
@@ -484,8 +484,80 @@ app.post('/api/tickets/submit', async (req, res) => {
     } catch (error) {
         res.status(500).json({ success: false, message: error.message || error });
     }
+});*/
+//modified code
+// Route to fetch all tickets for the Admin to see
+// 1. Route to fetch all tickets (for Admin panel)
+app.get('/api/tickets', (req, res) => {
+    const sql = 'SELECT * FROM support_tickets ORDER BY id DESC';
+    db.execute(sql, (err, rows) => {
+        if (err) {
+            console.error("Fetch Error:", err);
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(rows);
+    });
 });
 
+// Route to update a ticket with Admin Reply
+app.patch('/api/tickets/reply/:id', (req, res) => {
+    const { adminReply } = req.body;
+    const ticketId = req.params.id;
+
+    // Matches the 'admin_reply' column in your database screenshot
+    const sql = `UPDATE support_tickets 
+                 SET admin_reply = ?, status = 'Resolved' 
+                 WHERE id = ?`;
+
+    db.execute(sql, [adminReply, ticketId], (err, result) => {
+        if (err) {
+            console.error("Update Error:", err);
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ success: true, message: "Reply saved." });
+    });
+});
+// Submit Ticket Route (Using Callbacks)
+app.post('/api/tickets/submit', (req, res) => {
+    const { userId, fromPay, toPay, txnNo, message } = req.body;
+    
+    const sql = `INSERT INTO support_tickets (user_id, route, txn_no, user_message, status) 
+                 VALUES (?, ?, ?, ?, 'Pending')`;
+    
+    db.execute(sql, [userId, `${fromPay} ➔ ${toPay}`, txnNo, message], (err, result) => {
+        if (err) {
+            console.error("Insert Error:", err);
+            return res.status(500).json({ success: false, message: err.message });
+        }
+        res.json({ success: true, message: "Ticket submitted successfully." });
+    });
+});
+
+// Fetch Tickets Route (Using Callbacks)
+/*
+app.get('/api/tickets', (req, res) => {
+    db.execute('SELECT * FROM support_tickets ORDER BY id DESC', (err, rows) => {
+        if (err) {
+            console.error("Fetch Error:", err);
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(rows);
+    });
+});*/
+// Fetch Tickets Route
+//modified code
+app.get('/api/tickets', (req, res) => {
+    // Replace with your query to filter by user if needed
+    const sql = 'SELECT * FROM support_tickets ORDER BY id DESC';
+    
+    db.execute(sql, (err, rows) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: "Failed to fetch" });
+        }
+        res.json(rows);
+    });
+});
 // ───  ADMIN TRANSACTION APPROVAL ROUTE ───
 app.post('/api/admin/approve-transaction', async (req, res) => {
     const { transactionId, amount, txnIdTail, sender, receiver, toWallet } = req.body;
