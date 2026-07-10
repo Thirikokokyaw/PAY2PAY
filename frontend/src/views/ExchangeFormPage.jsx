@@ -6,25 +6,18 @@ import {
 import { ThemeContext } from '../App.jsx';
 import '../App.css';
 
-//  Added 'setUserInfo' into the props destruction layer to prevent runtime crashes
 export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, onRedirectToLogin = () => {} }) {
   const { darkMode } = useContext(ThemeContext);
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  //  SECURITY LAYER: Route Access Protection
-  useEffect(() => {
-    if (!isLoggedIn) {
-      onRedirectToLogin();
-    }
-  }, [isLoggedIn, onRedirectToLogin]);
-
-  // Wallet State Pool (Populated directly from Database)
-  const [wallets, setWallets] = useState({});
+  // Wallet Data State Pool (Populated dynamically from Database array)
+  const [wallets, setWallets] = useState([]);
   const [fromWallet, setFromWallet] = useState('');
   const [toWallet, setToWallet] = useState('');
   const [amount, setAmount] = useState('');
+  const [feeRate, setFeeRate] = useState(0.02); // Fallback: 2% (0.02)
 
   // Transaction Input States
   const [senderAccountName, setSenderAccountName] = useState('');
@@ -33,40 +26,39 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
   const [receiverName, setReceiverName] = useState('');
   const [lastSixDigits, setLastSixDigits] = useState('');
 
-  //  FETCH REAL-TIME WALLET DATA FROM DATABASE VIA API
+  // SECURITY LAYER: Route Access Protection
+  useEffect(() => {
+    if (!isLoggedIn) {
+      onRedirectToLogin();
+    }
+  }, [isLoggedIn, onRedirectToLogin]);
+
+  // FETCH REAL-TIME WALLET DATA & RATES FROM DATABASE VIA API
   const fetchWalletBalances = async () => {
     if (!userInfo?.id) return;
-    
-    // Turn loading on
     setIsLoading(true); 
 
-    //  LIVE USER STATUS CHECK LAYER ───
+    // LIVE USER STATUS CHECK LAYER 
     try {
       const res = await fetch(`http://localhost:5000/api/users/${userInfo.id}`);
-      
       if (res.ok) {
         const userData = await res.json();
         
-        // 1. Verify Blacklist State (Handles multiple data formats safely)
         if (userData.isBlacklisted === 1 || userData.isBlacklisted === true || userData.isBlacklisted === "1") {
           alert("Access Denied: Your profile has been permanently blacklisted from our ledger network.");
           setIsLoading(false); 
           return; 
         }
 
-        // 2. Verify Blocked State
         if (userData.status === 'Blocked') {
           alert("Account Suspended: This profile is temporarily frozen.");
           if (typeof setUserInfo === 'function') {
             setUserInfo(prev => ({ ...prev, status: 'Blocked' }));
-          } else {
-            userInfo.status = 'Blocked';
           }
           setIsLoading(false); 
           return; 
         }
         
-        // 3. Normalize Active Account States 
         if (userData.status === 'Active' && userInfo.status !== 'Active') {
           if (typeof setUserInfo === 'function') {
             setUserInfo(prev => ({ ...prev, status: 'Active' }));
@@ -74,36 +66,51 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
         }
       }
     } catch (e) {
-      console.error("Live user status sync failed, bypassing checkpoint:", e);
+      console.error("Live user status sync failed:", e);
     }
 
-    // ───  ORIGINAL WALLET BALANCES FETCH LOGIC ───
+    // FETCH FEE RATE FROM RATES TABLE WHERE ID = 1
+    try {
+      const rateRes = await fetch('http://localhost:5000/api/rates/1');
+      if (rateRes.ok) {
+        const rateData = await rateRes.json();
+        if (rateData && rateData.fee_rate !== undefined) {
+          setFeeRate(Number(rateData.fee_rate));
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch custom fee rate, using fallback:", e);
+    }
+
+    // ORIGINAL WALLET BALANCES FETCH LOGIC (Updated to parse SQL Table rows array)
     try {
       const response = await fetch('http://localhost:5000/api/wallets');
-      const data = await response.json();
+      const data = await response.json(); // Returns array from database SELECT
       
-      setWallets(data);
-      
-      const keys = Object.keys(data);
-      if (keys.length > 0) {
-        const activeWallets = keys.filter(k => data[k].active);
-        setFromWallet(activeWallets[0] || keys[0]);
-        setToWallet(keys[1] || keys[0]);
+      if (Array.isArray(data) && data.length > 0) {
+        setWallets(data);
+        
+        const activeWallets = data.filter(w => w.is_active === 'Y');
+   
+        if (activeWallets.length > 0) {
+          setFromWallet(activeWallets[0].wallet_id);
+          setToWallet(activeWallets[1]?.wallet_id || activeWallets[0].wallet_id);
+        } else {
+          setFromWallet(data[0].wallet_id);
+          setToWallet(data[1]?.wallet_id || data[0].wallet_id);
+        }
       }
     } catch (error) {
       console.error("Database connection failure, loading fallback profiles:", error);
-      const mockData = {
-        KBZPay: { label: 'KBZPay Mobile Wallet', balance: 1000000.00, active: true },
-        WavePay: { label: 'WavePay Mobile Wallet', balance: 1000000.00, active: true },
-        CBPay: { label: 'CBPay Mobile Banking', balance: 1000000.00, active: true }, 
-        AYAPay: { label: 'AYAPay Digital Wallet', balance: 1000000.00, active: true },
-        UABPay: { label: 'uabpay Mobile Wallet', balance: 1000000.00, active: true },
-      };
+      const mockData = [
+        { wallet_id: 'KBZPAY', wallet_name: 'KBZPay Mobile Wallet', current_balance: 1000000, is_active: 'Y', account_holder: 'Pay2Pay Premium', account_number: '09 777 888 999', qr_code_path: null },
+        { wallet_id: 'WAVEPAY', wallet_name: 'WavePay Mobile Wallet', current_balance: 300000, is_active: 'Y', account_holder: 'Pay2Pay Premium', account_number: '09 777 888 999', qr_code_path: null },
+        { wallet_id: 'CBPAY', wallet_name: 'CBPay Mobile Banking', current_balance: 500000, is_active: 'N', account_holder: 'Pay2Pay Premium', account_number: '09 777 888 999', qr_code_path: null }
+      ];
       setWallets(mockData);
-      setFromWallet('KBZPay');
-      setToWallet('WavePay');
+      setFromWallet('KBZPAY');
+      setToWallet('WAVEPAY');
     } finally {
-      //  Crucial execution hook: Ensures loading state turns OFF for regular users
       setIsLoading(false); 
     }
   };
@@ -114,38 +121,34 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
     }
   }, [isLoggedIn]);
 
-  // 🎨 DYNAMIC UI THEMING CONTEXT 
+  // Helper selectors to get dynamic single wallet metadata from array
+  const selectedFromWalletDetails = wallets.find(w => w.wallet_id === fromWallet);
+  const selectedToWalletDetails = wallets.find(w => w.wallet_id === toWallet);
+
+  // Dynamic UI colors
   const bgCard = darkMode 
     ? 'bg-slate-950 border border-amber-500/20 text-white shadow-[0_0_30px_rgba(212,175,55,0.15)]' 
     : 'bg-white border border-amber-500/30 text-slate-900 shadow-[0_10px_30px_rgba(0,0,0,0.05)]';
 
-  const bgInner = darkMode 
-    ? 'bg-slate-900/90 border border-amber-500/20' 
-    : 'bg-amber-50/40 border border-amber-500/20';
-
-  const bgInput = darkMode 
-    ? 'bg-slate-950 border-slate-800 text-white placeholder:text-slate-500 focus:border-amber-400' 
-    : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-amber-500';
-
+  const bgInner = darkMode ? 'bg-slate-900/90 border border-amber-500/20' : 'bg-amber-50/40 border border-amber-500/20';
+  const bgInput = darkMode ? 'bg-slate-950 border-slate-800 text-white focus:border-amber-400' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-amber-500';
   const textMuted = darkMode ? 'text-slate-400' : 'text-slate-500';
   const textTitle = darkMode ? 'text-amber-200' : 'text-amber-600 font-black';
   const bgBadge = darkMode ? 'bg-amber-300 text-slate-950' : 'bg-amber-500 text-white';
 
   const transferAmount = Number(amount) || 0;
-  const netReceivedAmount = transferAmount > 0 ? transferAmount * 0.98 : 0;
-
-  // ───  USER ACCOUNT BLOCKED RETURN STATEMENT ───
+  // Dynamic Fee Calculation based on database feeRate
+const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 100)) : 0;
+  // USER ACCOUNT BLOCKED STATEMENT
   if (isLoggedIn && userInfo && userInfo.status === 'Blocked') {
     return (
       <div className={`max-w-md mx-auto border rounded-3xl p-8 text-center transition-all ${bgCard} bg-amber-500/5 backdrop-blur-sm animate-fadeIn`}>
         <div className="w-14 h-14 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-500/20">
           <AlertCircle size={28} />
         </div>
-        <h3 className="text-base font-black uppercase tracking-wider text-amber-500">
-          Exchange Service Suspended
-        </h3>
+        <h3 className="text-base font-black uppercase tracking-wider text-amber-500">Exchange Service Suspended</h3>
         <p className={`text-[11px] mt-2 leading-relaxed max-w-xs mx-auto ${textMuted}`}>
-          Your transaction capabilities have been temporarily suspended by the administration. Please contact our support desk to clear account limitations.
+          Your transaction capabilities have been temporarily suspended by the administration.
         </p>
       </div>
     );
@@ -156,43 +159,41 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
     e.preventDefault();
     
     if (fromWallet === toWallet) {
-      alert(" Error: Source gateway and destination gateway cannot be identical.");
-      return;
-    }
-    if (!wallets[fromWallet]?.active) {
-      alert(` Operation Denied: The ${wallets[fromWallet]?.label} network service is currently suspended.`);
-      return;
-    }
-    if (transferAmount < 1000 || transferAmount > 500000) {
-      alert(" Threshold Error: Allowed transfer range is 1,000 MMK to 500,000 MMK only.");
+      alert("Error: Source gateway and destination gateway cannot be identical.");
       return;
     }
 
-    const targetWalletAvailableReserve = wallets[toWallet]?.balance || 0;
-    if (netReceivedAmount > targetWalletAvailableReserve) {
-      alert(` Liquidity Alert: Our ${wallets[toWallet]?.label} reserve currently only has ${targetWalletAvailableReserve.toLocaleString()} MMK available for payout. The maximum amount you can exchange right now from ${wallets[fromWallet]?.label} is ${Math.floor(targetWalletAvailableReserve / 0.98).toLocaleString()} MMK.`);
+    
+    if (selectedToWalletDetails && selectedToWalletDetails.is_active === 'N') {
+      alert(`Operation Denied: The destination network service (${selectedToWalletDetails.wallet_name}) is currently suspended.`);
+      return;
+    }
+
+    const availableReserve = selectedToWalletDetails?.current_balance ?? 0;
+    if (transferAmount > availableReserve) {
+      alert(`Balance Error: Cannot exchange more than the available reserve. Maximum allowed for this wallet is ${availableReserve.toLocaleString()} MMK.`);
+      return;
+    }
+
+    if (transferAmount < 1000 || transferAmount > 500000) {
+      alert("Threshold Error: Allowed transfer range is 1,000 MMK to 500,000 MMK only.");
       return;
     }
 
     setStep(2);
   };
 
-  //  STEP 3 SUBMISSION HANDLER
+  // STEP 3 SUBMISSION HANDLER
   const handleExchangeSubmit = async (e) => {
     e.preventDefault();
     
     const phoneRegex = /^\d{10,11}$/;
-    if (!phoneRegex.test(senderPhone)) {
-      alert(" Sender Phone Number must be exactly 10 or 11 digits.");
+    if (!phoneRegex.test(senderPhone) || !phoneRegex.test(receiverPhone)) {
+      alert("Phone Number must be exactly 10 or 11 digits.");
       return;
     }
-    if (!phoneRegex.test(receiverPhone)) {
-      alert(" Receiver Phone Number must be exactly 10 or 11 digits.");
-      return;
-    }
-
     if (lastSixDigits.length !== 6 || isNaN(lastSixDigits)) {
-      alert("Verification Failed: Please input exactly the final 6 numerical characters of your payment receipt code.");
+      alert("Verification Failed: Please input exactly the final 6 numerical characters.");
       return;
     }
 
@@ -201,13 +202,11 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
     try {
       const response = await fetch('http://localhost:5000/api/exchange/submit', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fromWallet: fromWallet,
           toWallet: toWallet,
-          amount: transferAmount,
+          amount: Number(transferAmount),
           txnIdTail: lastSixDigits,
           senderPhone: senderPhone,
           receiverPhone: receiverPhone,
@@ -218,15 +217,14 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
       });
 
       const result = await response.json();
-
       if (response.ok && result.success) {
-        setStep(4);
+        setStep(4); // Success and Pending view
       } else {
-        alert(` Core Rejection: ${result.message || 'Transaction submission failed.'}`);
+        alert(`Core Rejection: ${result.message || 'Transaction submission failed.'}`);
       }
     } catch (error) {
       console.error("Submission error:", error);
-      alert(" Network Failure: Cannot connect to the registration server database.");
+      alert("Network Failure: Cannot connect to the server database.");
     } finally {
       setIsSubmitting(false);
     }
@@ -255,7 +253,7 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
             {step === 1 && "Select Gateway"}
             {step === 2 && "Gateway Deposit"}
             {step === 3 && "Transfer Settlement"}
-            {step === 4 && "Complete Execution"}
+            {step === 4 && "Pending Verification"}
           </h3>
         </div>
         {step > 1 && step < 4 && (
@@ -269,13 +267,13 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
         )}
       </div>
 
-      {/*  STEP 1: INITIAL SELECTION & LIMIT ENFORCEMENT */}
+      {/* STEP 1: INITIAL SELECTION */}
       {step === 1 && (
         <form onSubmit={handleWalletSubmit} className="space-y-4">
           <div className={`p-3.5 rounded-2xl flex gap-2.5 ${bgInner}`}>
             <Info size={16} className={`${darkMode ? 'text-amber-300' : 'text-amber-600'} shrink-0 mt-0.5`} />
             <p className={`text-[11px] leading-relaxed ${darkMode ? 'text-slate-200' : 'text-slate-600'}`}>
-              Transactions range from a minimum of 1,000 MMK up to a maximum of 500,000 MMK. 
+              Transactions range from a minimum of 1,000 MMK up to a maximum of 500,000 MMK.
             </p>
           </div>
 
@@ -284,14 +282,14 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
               <label htmlFor="fromWalletSelect" className={`block text-[10px] font-bold uppercase mb-1.5 tracking-widest ${darkMode ? 'text-amber-400/80' : 'text-amber-700'}`}>From Wallet</label>
               <select 
                 id="fromWalletSelect"
-                name="fromWallet"
                 value={fromWallet} 
                 onChange={(e) => setFromWallet(e.target.value)}
                 className={`w-full border rounded-xl px-2.5 py-3 text-xs focus:outline-none font-bold transition-all ${bgInput}`}
               >
-                {Object.keys(wallets).map((key) => (
-                  <option key={key} value={key} disabled={!wallets[key].active} className={darkMode ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>
-                    {wallets[key].label} {!wallets[key].active ? '(Out of Stock)' : ''}
+                {wallets.map((w) => (
+                 
+                  <option key={w.wallet_id} value={w.wallet_id} className={darkMode ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>
+                    {w.wallet_name} {w.is_active !== 'Y' ? '' : ''}
                   </option>
                 ))}
               </select>
@@ -301,34 +299,30 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
               <label htmlFor="toWalletSelect" className={`block text-[10px] font-bold uppercase mb-1.5 tracking-widest ${darkMode ? 'text-amber-400/80' : 'text-amber-700'}`}>To Wallet</label>
               <select 
                 id="toWalletSelect"
-                name="toWallet"
                 value={toWallet} 
                 onChange={(e) => setToWallet(e.target.value)}
                 className={`w-full border rounded-xl px-2.5 py-3 text-xs focus:outline-none font-bold transition-all ${bgInput}`}
               >
-                {Object.keys(wallets).map((key) => (
-                  <option key={key} value={key} className={darkMode ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>
-                    {wallets[key].label}
+                {wallets.map((w) => (
+                  <option key={w.wallet_id} value={w.wallet_id} disabled={w.is_active !== 'Y'} className={darkMode ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>
+                    {w.wallet_name} {w.is_active !== 'Y' ? '(Disabled)' : ''}
                   </option>
                 ))}
               </select>
             </div>
           </div>
 
-          {toWallet && wallets[toWallet] && (
-            <div className={`p-2.5 rounded-xl border text-[11px] font-bold flex justify-between items-center ${darkMode ? 'bg-black/30 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
-              <span className={textMuted}>Max Payout Limit Right Now:</span>
-              <span className={wallets[toWallet].balance < 50000 ? "text-red-500 animate-pulse font-mono" : "text-emerald-500 font-mono"}>
-                {wallets[toWallet].balance.toLocaleString()} MMK
-              </span>
-            </div>
-          )}
+          <div className={`p-2.5 rounded-xl border text-[11px] font-bold flex justify-between items-center ${darkMode ? 'bg-black/30 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+            <span className={textMuted}>To Reserve Balance:</span>
+            <span className="text-emerald-500 font-mono">
+              {(selectedToWalletDetails?.current_balance ?? 0).toLocaleString()} MMK
+            </span>
+          </div>
 
           <div>
             <label htmlFor="transferAmountInput" className={`block text-[10px] font-bold uppercase mb-1.5 tracking-widest ${darkMode ? 'text-amber-400/80' : 'text-amber-700'}`}>Transfer Amount (MMK)</label>
             <input 
               id="transferAmountInput"
-              name="amount"
               type="number" 
               required 
               placeholder="Min: 1,000 - Max: 500,000" 
@@ -344,19 +338,27 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
         </form>
       )}
 
-      {/*  STEP 2: GATEWAY DEPOSIT AND INBOUND TRANSFER DETAILS */}
+      {/* STEP 2: GATEWAY DEPOSIT */}
       {step === 2 && (
         <div className="space-y-4 text-center">
           <div className={`p-5 border rounded-2xl ${bgInner} flex flex-col items-center`}>
-            <span className={`text-[9px] font-black uppercase tracking-widest mb-2.5 flex items-center gap-1 border px-2 py-0.5 rounded-full ${darkMode ? 'text-amber-300 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-50 border-amber-200'}`}>
+            {/* <span className={`text-[9px] font-black uppercase tracking-widest mb-2.5 flex items-center gap-1 border px-2 py-0.5 rounded-full ${darkMode ? 'text-amber-300 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-50 border-amber-200'}`}>
               <CheckCircle size={10} /> Secure Vault Active
-            </span>
+            </span> */}
             <p className={`text-xs font-medium mb-3 ${darkMode ? 'text-slate-100' : 'text-slate-700'}`}>
-              Transmit matching funds securely <span className={darkMode ? 'text-amber-300 font-bold' : 'text-amber-600 font-bold'}>{wallets[fromWallet]?.label}</span> node:
+              Transmit funds to <span className="text-amber-500 font-bold">{selectedFromWalletDetails?.wallet_name}</span> 
             </p>
 
             <div className={`w-36 h-36 p-2.5 rounded-xl shadow-lg border flex items-center justify-center relative my-1 ${darkMode ? 'bg-slate-950 border-amber-500/30' : 'bg-white border-amber-500/20'}`}>
-              <QrCode size={120} className={darkMode ? 'text-amber-300' : 'text-slate-900'} />
+              {selectedFromWalletDetails?.qr_code_path ? (
+                <img 
+                  src={`http://localhost:5000/${selectedFromWalletDetails.qr_code_path}`} 
+                  alt="Wallet Gateway QR" 
+                  className="w-full h-full object-contain rounded-lg"
+                />
+              ) : (
+                <QrCode size={120} className={darkMode ? 'text-amber-300' : 'text-slate-900'} />
+              )}
               <div className="absolute bottom-1 bg-amber-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded tracking-wide">
                 {fromWallet} CLEARING
               </div>
@@ -364,12 +366,16 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
             
             <div className={`mt-4 text-left w-full space-y-1.5 p-3 border rounded-xl ${darkMode ? 'bg-black/30 border-slate-800' : 'bg-white border-slate-100'}`}>
               <div className="flex justify-between text-[11px]">
-                <span className={textMuted}>Receiver Title</span> 
-                <span className={`font-bold ${darkMode ? 'text-amber-300' : 'text-amber-600'}`}>Pay2Pay Premium</span>
+                <span className={textMuted}>Receiver Title:</span> 
+                <span className={`font-bold ${darkMode ? 'text-amber-300' : 'text-amber-600'}`}>
+                  {selectedFromWalletDetails?.account_holder || "Pay2Pay Premium"}
+                </span>
               </div>
               <div className="flex justify-between text-[11px]">
-                <span className={textMuted}>Account Tag / Phone:</span> 
-                <span className={`font-mono font-bold ${darkMode ? 'text-amber-300' : 'text-slate-800'}`}>09 777 888 999</span>
+                <span className={textMuted}>Account / Phone:</span> 
+                <span className={`font-mono font-bold ${darkMode ? 'text-amber-300' : 'text-slate-800'}`}>
+                  {selectedFromWalletDetails?.account_number || "09 777 888 999"}
+                </span>
               </div>
             </div>
           </div>
@@ -379,7 +385,7 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
             <div>
               <h5 className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? 'text-amber-300' : 'text-amber-700'}`}>Audit Notice</h5>
               <p className={`text-[10px] leading-relaxed mt-0.5 ${textMuted}`}>
-                Retain your transfer log and extract the <span className={`font-black ${darkMode ? 'text-white' : 'text-slate-900'}`}>concluding 6 digits</span> of the receipt ID for COBOL reconciliation checking.
+                Retain your log and extract the <span className="font-black text-amber-500">concluding 6 digits</span> of the receipt ID.
               </p>
             </div>
           </div>
@@ -390,25 +396,25 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
         </div>
       )}
 
-      {/*  STEP 3: TRANSACTION METADATA COLLECTION */}
+      {/* STEP 3: TRANSACTION METADATA COLLECTION */}
       {step === 3 && (
         <form onSubmit={handleExchangeSubmit} className="space-y-4">
           <div className={`p-3.5 rounded-2xl border ${bgInner} space-y-2.5`}>
             <div className={`flex items-center justify-between text-xs border-b pb-2 ${darkMode ? 'border-amber-500/10' : 'border-amber-500/20'}`}>
               <span className={`font-bold flex items-center gap-1.5 ${darkMode ? 'text-amber-100' : 'text-slate-800'}`}>
-                <Wallet size={12} className={darkMode ? 'text-amber-400' : 'text-amber-600'} /> Premium Ledger
+                <Wallet size={12} className="text-amber-500" /> Premium Ledger
               </span>
-              <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border tracking-wider uppercase ${darkMode ? 'text-amber-300 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-100 border-amber-300'}`}>
-                2% Fee Applied
+              <span className="text-[9px] font-black px-2 py-0.5 rounded-md border tracking-wider uppercase text-amber-500 bg-amber-500/10 border-amber-500/20">
+                {(feeRate)}% Fee Applied
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2.5 text-center">
               <div className={`p-2 rounded-xl border ${darkMode ? 'bg-black/20 border-slate-800' : 'bg-white border-slate-100'}`}>
-                <span className={`text-[9px] block uppercase tracking-wider ${textMuted}`}>You Send ({wallets[fromWallet]?.label})</span>
+                <span className={`text-[9px] block uppercase tracking-wider ${textMuted}`}>You Send ({fromWallet})</span>
                 <span className={`text-xs font-black ${darkMode ? 'text-amber-300' : 'text-amber-600'}`}>{transferAmount.toLocaleString()} MMK</span>
               </div>
               <div className={`p-2 rounded-xl border ${darkMode ? 'bg-black/20 border-slate-800' : 'bg-white border-slate-100'}`}>
-                <span className={`text-[9px] block uppercase tracking-wider ${textMuted}`}>You Receive ({wallets[toWallet]?.label})</span>
+                <span className={`text-[9px] block uppercase tracking-wider ${textMuted}`}>You Receive ({toWallet})</span>
                 <span className={`text-xs font-black ${darkMode ? 'text-amber-300' : 'text-amber-600'}`}>{netReceivedAmount.toLocaleString()} MMK</span>
               </div>
             </div>
@@ -419,11 +425,11 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
             <div className="grid grid-cols-2 gap-2.5">
               <div>
                 <label htmlFor="senderAccountName" className={`block text-[10px] font-bold mb-1 ${textMuted}`}>Sender Account Name</label>
-                <input id="senderAccountName" name="senderAccountName" type="text" required placeholder="English text only" value={senderAccountName} onChange={(e) => setSenderAccountName(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none transition-all ${bgInput}`} />
+                <input id="senderAccountName" type="text" required placeholder="English text only" value={senderAccountName} onChange={(e) => setSenderAccountName(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none transition-all ${bgInput}`} />
               </div>
               <div>
-                <label htmlFor="senderPhone" className={`block text-[10px] font-bold mb-1 ${textMuted}`}>{wallets[fromWallet]?.label} </label>
-                <input id="senderPhone" name="senderPhone" type="tel" required placeholder="0912345678" value={senderPhone} onChange={(e) => setSenderPhone(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none font-mono transition-all ${bgInput}`} />
+                <label htmlFor="senderPhone" className={`block text-[10px] font-bold mb-1 ${textMuted}`}>Sender Phone Number</label>
+                <input id="senderPhone" type="tel" required placeholder="0912345678" value={senderPhone} onChange={(e) => setSenderPhone(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none font-mono transition-all ${bgInput}`} />
               </div>
             </div>
 
@@ -431,11 +437,11 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
             <div className="grid grid-cols-2 gap-2.5">
               <div>
                 <label htmlFor="receiverName" className={`block text-[10px] font-bold mb-1 ${textMuted}`}>Receiver Account Name</label>
-                <input id="receiverName" name="receiverName" type="text" required placeholder="English text only" value={receiverName} onChange={(e) => setReceiverName(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none transition-all ${bgInput}`} />
+                <input id="receiverName" type="text" required placeholder="English text only" value={receiverName} onChange={(e) => setReceiverName(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none transition-all ${bgInput}`} />
               </div>
               <div>
-                <label htmlFor="receiverPhone" className={`block text-[10px] font-bold mb-1 ${textMuted}`}>Target {wallets[toWallet]?.label}</label>
-                <input id="receiverPhone" name="receiverPhone" type="tel" required placeholder="0912345678" value={receiverPhone} onChange={(e) => setReceiverPhone(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none font-mono transition-all ${bgInput}`} />
+                <label htmlFor="receiverPhone" className={`block text-[10px] font-bold mb-1 ${textMuted}`}>Target Phone Number</label>
+                <input id="receiverPhone" type="tel" required placeholder="0912345678" value={receiverPhone} onChange={(e) => setReceiverPhone(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none font-mono transition-all ${bgInput}`} />
               </div>
             </div>
 
@@ -443,7 +449,7 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
               <label htmlFor="lastSixDigits" className={`block text-[10px] font-black uppercase mb-1.5 tracking-widest flex items-center gap-1 ${darkMode ? 'text-amber-300' : 'text-amber-700'}`}>
                 <AlertCircle size={11} /> Last 6 Digits of Transaction ID
               </label>
-              <input id="lastSixDigits" name="lastSixDigits" type="text" maxLength={6} required placeholder="e.g. 543210" value={lastSixDigits} onChange={(e) => setLastSixDigits(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none font-mono font-black tracking-widest text-center transition-all ${darkMode ? 'border-amber-500/30' : 'border-amber-500/50'} ${bgInput}`} />
+              <input id="lastSixDigits" type="text" maxLength={6} required placeholder="e.g. 543210" value={lastSixDigits} onChange={(e) => setLastSixDigits(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none font-mono font-black tracking-widest text-center transition-all ${darkMode ? 'border-amber-500/30' : 'border-amber-500/50'} ${bgInput}`} />
             </div>
           </div>
 
@@ -461,16 +467,19 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
         </form>
       )}
 
-      {/*  STEP 4: SUCCESS QUEUE CONFIRMATION */}
+      {/* STEP 4: SUCCESS & PENDING CONFIRMATION */}
       {step === 4 && (
-        <div className="text-center py-6 space-y-5">
-          <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto border shadow-sm ${darkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' : 'bg-amber-50 text-amber-600 border-amber-200'}`}>
-            <CheckCircle size={26} />
+        <div className="text-center py-6 space-y-5 animate-fadeIn">
+          <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto border shadow-sm bg-amber-500/10 text-amber-500 border-amber-500/30">
+            <RefreshCw size={26} className="animate-spin text-amber-500" />
           </div>
           <div className="space-y-1.5">
-            <h4 className={`text-xs font-black uppercase tracking-widest ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>Submission Successful</h4>
+            <span className="text-[10px] font-black px-2.5 py-1 rounded-full uppercase bg-amber-500/20 text-amber-500 font-mono tracking-widest border border-amber-500/30 animate-pulse">
+              Status: PENDING
+            </span>
+            <h4 className={`text-xs font-black uppercase tracking-widest mt-3 ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>Submission Successful</h4>
             <p className={`text-[11px] leading-relaxed px-4 ${textMuted}`}>
-              Our ledger system is verifying your 6-digit payment code. Your dynamic exchange balance transfer execution will update upon processing approval within 20 minutes.
+              Your dynamic exchange balance transfer execution will update upon processing approval within 20 minutes.
             </p>
           </div>
           <div className="pt-2">
@@ -486,7 +495,7 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
                 setReceiverName('');
                 fetchWalletBalances(); 
               }}
-              className="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all bg-amber-500 hover:bg-amber-600 text-white"
+              className="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all bg-amber-500 hover:bg-amber-600 text-white shadow-md"
             >
               New Transaction
             </button>

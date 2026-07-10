@@ -1,6 +1,7 @@
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
+const fs = require('fs');
 const { exec, execFile } = require('child_process');
 const path = require('path');
 const { spawn } = require('child_process'); 
@@ -12,21 +13,44 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// XAMPP MySQL Connection
-const db = mysql.createConnection({
+// ✅ FIXED: Configured as a Connection Pool to support .getConnection()
+const db = mysql.createPool({
     host: 'localhost',
     user: 'root',
     password: '', 
-    database: 'pay2pay_db'
+    database: 'pay2pay_db',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
-db.connect((err) => {
+// Test the pool initialized correctly
+db.query('SELECT 1', (err) => {
     if (err) {
-        console.error('Database connection failed: ' + err.stack);
+        console.error('Database connection pool failed: ' + err.stack);
         return;
     }
-    console.log('Connected to XAMPP MySQL Database.');
+    console.log('Connected to XAMPP MySQL Database Pool.');
 });
+
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR);
+}
+const saveBase64Image = (base64String) => {
+  if (!base64String || !base64String.startsWith('data:image')) return base64String;
+
+  const matches = base64String.match(/^data:image\/([A-Za-z+]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) return null;
+
+  const extension = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+  const dataBuffer = Buffer.from(matches[2], 'base64');
+  const filename = `qr_${Date.now()}.${extension}`;
+  const filepath = path.join(UPLOADS_DIR, filename);
+
+  fs.writeFileSync(filepath, dataBuffer);
+  return `http://localhost:5000/uploads/${filename}`;
+};
 
 //  Helper function to call COBOL Authentication Validator
 const callCobolValidator = (action, name, phone, email, password) => {
@@ -51,7 +75,7 @@ const callCobolValidator = (action, name, phone, email, password) => {
     });
 };
 
-// 💡 Helper Function to call COBOL Exchange Validator (Comma Separated Delimiter)
+//  Helper Function to call COBOL Exchange Validator (Comma Separated Delimiter)
 const callExchangeValidator = (action, amount, txnTail, sender, receiver) => {
     return new Promise((resolve, reject) => {
         const args = `${action},${amount},${txnTail},${sender},${receiver}`;
@@ -75,68 +99,269 @@ const callExchangeValidator = (action, amount, txnTail, sender, receiver) => {
 };
 
 // ─── FETCH LIVE WALLET STATUSES & RESERVES ROUTE ───
-app.get('/api/wallets', (req, res) => {
-    db.query('SELECT * FROM WALLETS', (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
-        const walletMap = {};
-        results.forEach(row => {
-            walletMap[row.wallet_id] = {
-                label: row.wallet_name,
-                balance: parseFloat(row.current_balance),
-                active: row.is_active === 'Y'
-            };
-        });
-        res.json(walletMap); 
-    });
+app.get('/api/wallets', async (req, res) => {
+  try {
+    const [rows] = await db.promise().query('SELECT * FROM wallets');
+    res.json(rows);
+  } catch (error) {
+    console.error('Fetch error:', error);
+    res.status(500).json({ success: false, message: 'Database fetch failed' });
+  }
 });
 
-// ───  SUBMIT EXCHANGE TRANSACTION DATA ROUTE (POST Method) ───
-app.post('/api/exchange/submit', async (req, res) => {
-    const { fromWallet, toWallet, amount, txnIdTail, senderPhone, receiverPhone, senderName, receiverName, userId } = req.body;
+// CREATE WALLET API
+app.post('/api/wallets/create', async (req, res) => {
+  try {
+    const { 
+      wallet_id, wallet_name, account_number, account_holder, 
+      qr_code_path, current_balance, limit_warning, is_active 
+    } = req.body;
 
-    if (!fromWallet || !toWallet || amount === undefined || amount === null || !txnIdTail || !senderPhone || !receiverPhone) {
-        return res.status(400).json({ success: false, message: "Missing required tracking arguments inside payload body structure." });
+    if (!wallet_id) {
+      return res.status(400).json({ success: false, message: 'Missing wallet_id field' });
     }
 
-    const finalUserId = userId || 1; 
-    const sendAmount = Number(amount);
-    const receiveAmount = sendAmount * 0.98; 
+    const finalImagePath = saveBase64Image(qr_code_path);
 
-    try {
-        const cobolRes = await callExchangeValidator('VALIDATE_TXN', sendAmount, txnIdTail, senderPhone, receiverPhone);
-        
-        if (cobolRes.status === 'ERROR') {
-            return res.status(400).json({ success: false, message: cobolRes.message });
-        }
+    const sql = `
+      INSERT INTO wallets 
+      (wallet_id, wallet_name, account_number, account_holder, qr_code_path, current_balance, limit_warning, is_active) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `;
 
-        const sqlQuery = `
-            INSERT INTO EXCHANGE_TRANSACTIONS (
-                user_id, from_wallet, to_wallet, send_amount, receive_amount, 
-                txn_id_tail, sender_name, sender_phone, receiver_name, receiver_phone, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '0')
-        `;
+    await db.promise().query(sql, [
+      wallet_id.toUpperCase(), 
+      wallet_name || '', 
+      account_number || '', 
+      account_holder || '', 
+      finalImagePath || null, 
+      current_balance || 0, 
+      limit_warning || 5000000, 
+      is_active || 'Y'
+    ]);
 
-        const queryValues = [
-            finalUserId, fromWallet, toWallet, sendAmount, receiveAmount,
-            txnIdTail, senderName || 'N/A', senderPhone, receiverName || 'N/A', receiverPhone
-        ];
+    res.json({ success: true, message: 'Wallet created successfully!' });
+  } catch (error) {
+    console.error('Create error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
-        db.query(sqlQuery, queryValues, (dbErr, dbResult) => {
-            if (dbErr) {
-                console.error("MySQL Insertion Failed:", dbErr);
-                return res.status(500).json({ success: false, message: "Failed to store inside ledger database table." });
-            }
-            return res.status(200).json({ 
-                success: true, 
-                message: "Transaction authorized and archived inside SQL ledger table successfully!" 
-            });
+// UPDATE WALLET DETAILS & CALL COBOL ENGINE API
+app.post('/api/wallets/update-details', async (req, res) => {
+  try {
+    const { 
+      wallet_id, wallet_name, account_number, account_holder, 
+      qr_code_path, current_balance, limit_warning 
+    } = req.body;
+
+    let finalImagePath = qr_code_path;
+    if (qr_code_path && qr_code_path.startsWith('data:image')) {
+      finalImagePath = saveBase64Image(qr_code_path);
+    }
+
+    const runCobolEngine = (balance) => {
+      return new Promise((resolve) => {
+        const cobolCommand = `check_balance.exe ${balance}`;
+        exec(cobolCommand, (error, stdout) => {
+          if (!error && stdout) {
+            resolve(stdout.trim().toUpperCase());
+          } else {
+            const state = Number(balance) < 1000 ? 'N' : 'Y';
+            resolve(state);
+          }
         });
+      });
+    };
 
-    } catch (error) {
-        console.error("COBOL Execution Flow Catch Block Error:", error);
-        res.status(500).json({ success: false, message: "Internal validation process runtime failure." });
+    const calculatedActiveState = await runCobolEngine(current_balance);
+
+    const updateSql = `
+      UPDATE wallets 
+      SET wallet_name = ?, 
+          account_number = ?, 
+          account_holder = ?, 
+          qr_code_path = ?, 
+          current_balance = ?, 
+          limit_warning = ?, 
+          is_active = ? 
+      WHERE wallet_id = ?
+    `;
+
+    await db.promise().query(updateSql, [
+      wallet_name || '', 
+      account_number || '', 
+      account_holder || '', 
+      finalImagePath || null, 
+      current_balance || 0, 
+      limit_warning || 1000, 
+      calculatedActiveState, 
+      wallet_id              
+    ]);
+
+    res.json({ 
+      success: true, 
+      is_active: calculatedActiveState, 
+      message: 'Wallet config updated and status verified via COBOL engine!' 
+    });
+
+  } catch (error) {
+    console.error('Update controller error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.get('/api/rates/:id', async (req, res) => {
+  let connection;
+  try {
+    const rateId = req.params.id;
+    connection = await db.promise().getConnection();
+    
+    const [rows] = await connection.query(
+      'SELECT id, fee_rate FROM rates WHERE id = ?', 
+      [rateId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Rate configuration not found.' });
     }
+
+    res.json(rows[0]); // Returns { id: 1, fee_rate: 2.0 }
+  } catch (error) {
+    console.error('Fetch Rates Error:', error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// SUBMIT TRANSACTION ROUTE
+app.post('/api/exchange/submit', async (req, res) => {
+  console.log("=== Received Request Body ===", req.body);
+  
+  let connection;
+  try {
+    const {
+      fromWallet,
+      toWallet,
+      amount,
+      txnIdTail,
+      senderPhone,
+      receiverPhone,
+      senderName,
+      receiverName,
+      userId
+    } = req.body;
+
+    // 1. Initial Frontend Inputs Validation
+    if (!fromWallet || !toWallet || !amount || !txnIdTail || !senderPhone || !receiverPhone) {
+      return res.status(400).json({ success: false, message: 'Required fields are missing.' });
+    }
+
+    connection = await db.promise().getConnection();
+    await connection.beginTransaction();
+
+    // 2. Fetch Wallet status dynamically from Database
+    const [wallets] = await connection.query(
+      'SELECT wallet_id, wallet_name, is_active, current_balance FROM wallets WHERE wallet_id IN (?, ?)',
+      [fromWallet, toWallet]
+    );
+
+    const sourceWallet = wallets.find(w => w.wallet_id === fromWallet);
+
+    if (!sourceWallet) {
+      await connection.rollback();
+      return res.status(400).json({ success: false, message: 'Source (From) wallet not found in system.' });
+    }
+
+    // 3. Fetch current fee rate (Handle as Integer)
+    const [rateRows] = await connection.query(
+      'SELECT fee_rate FROM rates WHERE id = 1'
+    );
+
+    let currentFeeRate = 2; 
+    if (rateRows.length > 0) {
+      currentFeeRate = parseInt(rateRows[0].fee_rate, 10) || 0; 
+    }
+
+    // 4. Prepare Arguments and execute COBOL Validation Engine
+    const availableBalance = sourceWallet.current_balance; 
+    const cobolArgs = `VALIDATE_TXN,${amount},${availableBalance},${txnIdTail},${senderPhone},${receiverPhone}`;
+    
+    const runCobolValidator = () => {
+      return new Promise((resolve) => {
+        exec(`exchangeform.exe "${cobolArgs}"`, (error, stdout, stderr) => {
+          if (error) {
+            console.error("COBOL Runtime Error:", error);
+            resolve({ valid: false, message: "COBOL Validation Engine failed to execute." });
+          } else {
+            const output = stdout.trim();
+            console.log("COBOL Engine Output Log:", output);
+
+            if (output.startsWith("SUCCESS")) {
+              resolve({ valid: true });
+            } else if (output.startsWith("ERROR|")) {
+              resolve({ valid: false, message: output.split('|')[1] });
+            } else {
+              resolve({ valid: false, message: "System metadata validation failed." });
+            }
+          }
+        });
+      });
+    };
+
+    const cobolResult = await runCobolValidator();
+    if (!cobolResult.valid) {
+      await connection.rollback();
+      return res.status(400).json({ success: false, message: cobolResult.message });
+    }
+
+    // 5. Accurate Amount Calculations (Integer Fee Friendly)
+    const numericAmount = Number(amount);
+    const feePercentage = currentFeeRate / 100;
+    const calculatedFee = numericAmount * feePercentage;
+    const netReceiveAmount = parseFloat((numericAmount - calculatedFee).toFixed(2));
+    // 6. Deduct Balance from Source Wallet
+    await connection.query(
+      'UPDATE wallets SET current_balance = current_balance - ? WHERE wallet_id = ?',
+      [numericAmount, fromWallet]
+    );
+
+    // 7. Log Transaction Record under Status '0' (Pending)
+    const insertTxnSql = `
+      INSERT INTO exchange_transactions 
+      (user_id, from_wallet, to_wallet, send_amount, receive_amount, txn_id_tail, sender_name, sender_phone, receiver_name, receiver_phone, status) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '0')
+    `;
+
+    await connection.query(insertTxnSql, [
+      userId || 1,
+      fromWallet,
+      toWallet,
+      numericAmount,
+      netReceiveAmount, 
+      txnIdTail,
+      senderName || '',
+      senderPhone,
+      receiverName || '',
+      receiverPhone
+    ]);
+
+    await connection.commit();
+    
+    res.json({ 
+      success: true, 
+      message: 'Exchange request submitted successfully. Waiting for admin approval (Status: Pending).',
+      netReceiveAmount: netReceiveAmount
+    });
+
+  } catch (error) {
+    if (connection) await connection.rollback();
+    console.error('Exchange Submit System Failure Log:', error);
+    res.status(500).json({ success: false, message: 'Internal Server Error occurred.' });
+  } finally {
+    if (connection) connection.release();
+  }
 });
 
 // ─── REGISTER ROUTE ───
@@ -276,12 +501,12 @@ app.post('/api/admin/approve-transaction', async (req, res) => {
         }
 
         db.query(
-            'UPDATE WALLETS SET current_balance = current_balance - ? WHERE wallet_id = ?',
+            'UPDATE wallets SET current_balance = current_balance - ? WHERE wallet_id = ?',
             [amount, toWallet],
             (dbErr, dbRes) => {
                 if (dbErr) return res.status(500).json({ message: "Database Update Failed" });
                 
-                db.query('UPDATE EXCHANGE_TRANSACTIONS SET status = "1" WHERE txn_id = ?', [transactionId], (statusErr) => {
+                db.query('UPDATE exchange_transactions SET status = "1" WHERE txn_id = ?', [transactionId], (statusErr) => {
                     if (statusErr) console.error("Status Update Failed", statusErr);
                     res.status(200).json({ success: true, message: "Transaction completed and funds settled!" });
                 });
@@ -303,7 +528,7 @@ app.post('/api/admin/replenish-wallet', (req, res) => {
         if (result[0] === 'ERROR') return res.status(400).json({ message: result[1] });
 
         db.query(
-            'UPDATE WALLETS SET current_balance = current_balance + ? WHERE wallet_id = ?',
+            'UPDATE wallets SET current_balance = current_balance + ? WHERE wallet_id = ?',
             [replenishAmount, walletId],
             (dbErr, dbRes) => {
                 if (dbErr) return res.status(500).json({ message: "Replenish Database Error" });
@@ -424,7 +649,6 @@ app.put('/api/admin/users/:id/toggle-blacklist', (req, res) => {
         const currentBlacklistState = Number(results[0].isBlacklisted || 0);
         const nextBlacklistState = currentBlacklistState === 1 ? 0 : 1;
         
-        // 💡 FIXED: Changed 'updateErr' to 'err' to match callback parameters
         db.query('UPDATE users SET isBlacklisted = ? WHERE id = ?', [nextBlacklistState, userId], (err) => {
             if (err) {
                 console.error("Blacklist update error:", err);
@@ -453,7 +677,7 @@ app.get('/api/users/:id', (req, res) => {
     });
 });
 
-//  FIXED: GET USER PROFILE, TRANSACTIONS & COBOL STATS
+//  GET USER PROFILE, TRANSACTIONS & COBOL STATS
 app.get('/api/user-node/:id', (req, res) => {
     const userId = req.params.id;
     const exePath = path.join(__dirname, 'get_user_txns.exe');
@@ -483,13 +707,12 @@ app.get('/api/user-node/:id', (req, res) => {
                 return res.status(500).json({ error: "Internal Server Database Controller Error" });
             }
 
-            // ─── 🚀 STEP 3: RUN COBOL VIA STANDARD INPUT/OUTPUT PIPE (NO DAT FILE) ───
+            // ─── STEP 3: RUN COBOL VIA STANDARD INPUT/OUTPUT PIPE
             const cobolProcess = spawn(exePath, [userId], { cwd: __dirname });
 
             let stdoutData = "";
             let stderrData = "";
 
-            // COBOL ထံမှ ပြန်ထွက်လာမည့် Output (Display များကို ဖမ်းယူခြင်း)
             cobolProcess.stdout.on('data', (data) => {
                 stdoutData += data.toString();
             });
@@ -498,17 +721,13 @@ app.get('/api/user-node/:id', (req, res) => {
                 stderrData += data.toString();
             });
 
-            // ဒေတာဘေ့စ်ထဲက ရလာတဲ့ Status တွေကို COBOL ဆီ တိုက်ရိုက်တွန်းပို့ပေးခြင်း
             txnRows.forEach(row => {
-                // status တစ်ခုချင်းစီကို စာကြောင်းအသစ်ခံပြီး COBOL ဆီ ပို့ပေးပါတယ် (ဥပမာ "0\n", "1\n")
                 cobolProcess.stdin.write(`${row.status}\n`);
             });
 
-            // ဒေတာကုန်သွားကြောင်း သိစေရန် "E" (End) ဟု ပို့ပြီး Input Pipe ကို ပိတ်လိုက်ပါတယ်
             cobolProcess.stdin.write("E\n");
             cobolProcess.stdin.end();
 
-            // COBOL အလုပ်လုပ်ပြီးသွားချိန်တွင် Response ပြန်ပေးခြင်း
             cobolProcess.on('close', (code) => {
                 let cobolSummary = { totalExchanges: txnRows.length, pendingCount: 0 };
 
@@ -534,7 +753,7 @@ app.get('/api/user-node/:id', (req, res) => {
     });
 });
 
-// FIXED: UPDATE USER PROFILE (Refactored to Standard Callback)
+// UPDATE USER PROFILE (Refactored to Standard Callback)
 app.put('/api/user-node/update/:id', (req, res) => {
     const userId = req.params.id;
     const { name, phone, email, profile_photo } = req.body;
@@ -562,7 +781,7 @@ app.put('/api/user-node/update/:id', (req, res) => {
     });
 });
 
-//  FETCH ALL ADMINS (Fixed to use standard 'db' callback) ───
+//  FETCH ALL ADMINS
 app.get('/api/admins', (req, res) => {
     const query = `
         SELECT id, name, email, phone, role, status, isBlacklisted 
@@ -580,7 +799,7 @@ app.get('/api/admins', (req, res) => {
     });
 });
 
-// ───  CREATE NEW ADMIN (Fixed & Sends back JSON immediately for Live Update) ───
+//  CREATE NEW ADMIN
 app.post('/api/admins', (req, res) => {
     const { name, email, phone, password } = req.body;
 
@@ -609,7 +828,7 @@ app.post('/api/admins', (req, res) => {
     });
 });
 
-// ───  REVOKE ADMIN PROTOCOL (Fixed & Protects Super Admin) ───
+//  REVOKE ADMIN PROTOCOL
 app.patch('/api/admins/revoke/:id', (req, res) => {
     const adminId = req.params.id;
 
@@ -627,6 +846,81 @@ app.patch('/api/admins/revoke/:id', (req, res) => {
                 return res.status(500).json({ error: updateErr.message });
             }
             res.json({ success: true, message: "Operator terminated successfully from server node." });
+        });
+    });
+});
+
+app.post('/api/settings/update', (req, res) => {
+    const { fee_rate, is_platform_online } = req.body;
+
+    // 1. If updating the Processing Fee Rate
+    if (fee_rate !== undefined) {
+        db.query('UPDATE rates SET fee_rate = ? WHERE id = 1', [fee_rate], (err) => {
+            if (err) {
+                console.error("SQL Error updating fee:", err);
+                return res.status(500).json({ error: "Failed to update rate margin." });
+            }
+            return res.json({ success: true });
+        });
+    } 
+    // 2. If handling Emergency Maintenance Lockdowns
+    else if (is_platform_online !== undefined) {
+        // Step A: Save the new operational gate layout status to rates table
+        db.query('UPDATE rates SET is_platform_online = ? WHERE id = 1', [is_platform_online], (err) => {
+            if (err) {
+                console.error("SQL Error updating platform status:", err);
+                return res.status(500).json({ error: "Failed to save operational state." });
+            }
+
+            if (is_platform_online === 'N') {
+                // LOCKDOWN ACTIVATED: Set all user wallet nodes to inactive status
+                db.query("UPDATE wallets SET is_active = 'N'", (wErr) => {
+                    if (wErr) console.error("Error freezing wallets:", wErr);
+                    return res.json({ success: true, status: 'N' });
+                });
+            } else {
+                
+                const balanceQuery = `
+                    UPDATE wallets 
+                    SET is_active = CASE 
+                        WHEN current_balance < 1000 THEN 'N' 
+                        ELSE 'Y' 
+                    END
+                `;
+                db.query(balanceQuery, (wErr) => {
+                    if (wErr) {
+                        console.error("Error restoring conditional wallets:", wErr);
+                        return res.status(500).json({ error: "Failed to restore wallets status." });
+                    }
+                    return res.json({ success: true, status: 'Y' });
+                });
+            }
+        });
+    } else {
+        res.status(400).json({ error: "No operational keys were matched." });
+    }
+});
+
+app.get('/api/settings', (req, res) => {
+    db.query('SELECT * FROM rates WHERE id = 1', (err, results) => {
+        if (err) {
+            console.error("SQL Fetch Settings Error:", err.message);
+            return res.status(500).json({ error: "Failed to fetch system operational gates." });
+        }
+    
+        if (results.length === 0) {
+            return res.json({
+                feeRate: 2,
+                isPlatformOnline: true,
+                maintenanceMessage: "System is under maintenance."
+            });
+        }
+
+        const settings = results[0];    
+        res.json({
+            feeRate: parseFloat(settings.fee_rate),
+            isPlatformOnline: settings.is_platform_online === 'Y',
+            maintenanceMessage: settings.maintenance_message
         });
     });
 });

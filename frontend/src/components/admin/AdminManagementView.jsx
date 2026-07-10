@@ -98,7 +98,7 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <form onSubmit={handleCreateAdmin} className={`border p-6 rounded-2xl space-y-4 ${theme.card}`}>
           <h3 className="text-xs font-extrabold uppercase tracking-widest text-amber-500 flex items-center gap-2">
-            <PlusCircle size={16} /> Assign Operator Token
+            <PlusCircle size={16} /> Create Admin
           </h3>
           <div>
             <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Full Name</label>

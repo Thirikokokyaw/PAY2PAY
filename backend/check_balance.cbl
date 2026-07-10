@@ -1,0 +1,27 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. CHECK-BALANCE.
+       AUTHOR. PAY2PAY-ENGINE.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  WS-ARG-STRING     PIC X(100) VALUE SPACES.
+       01  WS-AMOUNT-NUM     PIC 9(9)V99 VALUE ZERO.
+
+       PROCEDURE DIVISION.
+       MAIN-PROCEDURE.
+           ACCEPT WS-ARG-STRING FROM COMMAND-LINE.
+
+           IF WS-ARG-STRING = SPACES THEN
+               DISPLAY "N"
+               STOP RUN
+           END-IF.
+
+           COMPUTE WS-AMOUNT-NUM = FUNCTION NUMVAL(WS-ARG-STRING)
+
+           IF WS-AMOUNT-NUM < 1000 THEN
+               DISPLAY "N"
+           ELSE
+               DISPLAY "Y"
+           END-IF.
+
+           STOP RUN.
