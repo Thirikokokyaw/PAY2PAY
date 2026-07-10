@@ -152,8 +152,9 @@ app.post('/api/wallets/update-details', async (req, res) => {
   try {
     const { 
       wallet_id, wallet_name, account_number, account_holder, 
-      qr_code_path, current_balance, limit_warning 
+      qr_code_path, current_balance, limit_warning, is_active, isToggleAction
     } = req.body;
+
 
     let finalImagePath = qr_code_path;
     if (qr_code_path && qr_code_path.startsWith('data:image')) {
@@ -162,6 +163,9 @@ app.post('/api/wallets/update-details', async (req, res) => {
 
     const runCobolEngine = (balance) => {
       return new Promise((resolve) => {
+        if (isToggleAction && is_active) {
+          return resolve(is_active);
+        }
         const cobolCommand = `check_balance.exe ${balance}`;
         exec(cobolCommand, (error, stdout) => {
           if (!error && stdout) {
