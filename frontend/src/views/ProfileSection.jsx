@@ -103,6 +103,7 @@ export default function ProfileSection({
   }, [userInfo?.id]);
 
   // Sync state if userInfo updates from parent/database props
+  /*
   useEffect(() => {
     setEditName(userInfo.name);
     setEditPhone(userInfo.phone);
@@ -123,7 +124,35 @@ export default function ProfileSection({
     }
     setIsEditing(false);
     alert("Profile details have been updated in the database system successfully.");
+  };*/
+  // Add this inside your ProfileSection component
+useEffect(() => {
+  const fetchTickets = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/tickets');
+      const data = await response.json();
+      
+      // Map database columns to match your UI expectation
+      const formattedTickets = data.map(t => ({
+        id: `TKT-${t.id}`, // Assuming your DB ID is a number
+        status: t.status,
+        route: t.route,
+        txn: t.txn_no,
+        userMsg: t.user_message,
+        sysReply: t.admin_reply || "Awaiting response..."
+      }));
+      
+      setSupportTickets(formattedTickets);
+    } catch (error) {
+      console.error("Error fetching tickets:", error);
+    }
   };
+
+  if (activeTab === 'support') {
+    fetchTickets();
+  }
+}, [activeTab]); // Runs whenever the support tab is opened
+//end modified code
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
@@ -137,7 +166,7 @@ export default function ProfileSection({
   };
 
   // Support Ticket Form Submit Handler
-  const handleSupportSubmit = (e) => {
+  /*const handleSupportSubmit = (e) => {
     e.preventDefault();
     const newTicket = {
       id: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -171,7 +200,38 @@ export default function ProfileSection({
       console.error("Voucher download error:", error);
       alert("Voucher download error!!!");
     }
+  };*/
+  //modified code
+  const handleSupportSubmit = async (e) => {
+  e.preventDefault();
+  
+  const ticketData = {
+    userId: userInfo.id, 
+    fromPay,
+    toPay,
+    txnNo: supportTxnNo,
+    message: supportMessage
   };
+
+  try {
+    const response = await fetch('http://localhost:5000/api/tickets/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ticketData)
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      alert("Ticket submitted successfully!");
+      setSupportTxnNo('');
+      setSupportMessage('');
+    }
+  } catch (error) {
+    console.error("Submission Error:", error);
+  }
+};
+
+//end modified code
 
   const getStatusDetails = (statusCode) => {
     switch (String(statusCode)) {
