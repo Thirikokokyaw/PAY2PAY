@@ -38,32 +38,10 @@ export default function Pay2PayExchange() {
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [copiedField, setCopiedField] = useState('');
   const [pendingView, setPendingView] = useState(null);
-  
+  const [loading, setLoading] = useState(true); 
   // App-level state configurations
   const [feeRate, setFeeRate] = useState(2);
   const [isPlatformOnline, setIsPlatformOnline] = useState('Y');
-
-  // Shared function to pull latest system configurations from DB
-  const fetchSettingsFromDatabase = async () => {
-    try {
-      const res = await fetch('http://localhost:5000/api/settings');
-      if (res.ok) {
-        const data = await res.json();
-        // Fallback checks matching backend structure
-        if (data.feeRate !== undefined) setFeeRate(data.feeRate);
-        if (data.isPlatformOnline !== undefined) {
-          setIsPlatformOnline(data.isPlatformOnline ? 'Y' : 'N');
-        }
-      }
-    } catch (err) {
-      console.error("Failed synchronization check:", err);
-    }
-  };
-
-  // Initial load auto-fetch configuration
-  useEffect(() => {
-    fetchSettingsFromDatabase();
-  }, []);
 
   const [userInfo, setUserInfo] = useState({
     id: null,
@@ -86,6 +64,22 @@ export default function Pay2PayExchange() {
     'TrueMoney': { name: "Ko Sai Naing", phone: "09666123456", qr: "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=TrueMoney_09666123456", color: "text-orange-600" }
   };
 
+  // Shared function to pull latest system configurations from DB
+  const fetchSettingsFromDatabase = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/settings');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.feeRate !== undefined) setFeeRate(data.feeRate);
+        if (data.isPlatformOnline !== undefined) {
+          setIsPlatformOnline(data.isPlatformOnline ? 'Y' : 'N');
+        }
+      }
+    } catch (err) {
+      console.error("Failed synchronization check:", err);
+    }
+  };
+
   const fetchDatabaseRecords = async (targetId) => {
     if (!targetId) return;
     try {
@@ -93,22 +87,64 @@ export default function Pay2PayExchange() {
       const data = await response.json();
       if (response.ok) {
         const photoUrl = data.userInfo.profile_photo || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80";
+        
         setUserInfo({
-          id: data.userInfo.id,
+          id: data.userInfo.id || targetId,
           name: data.userInfo.name,
           phone: data.userInfo.phone,
           email: data.userInfo.email,
           role: data.userInfo.role,
           avatar: photoUrl,
           profile_photo: photoUrl,
-          status: data.userInfo.status
+          status: data.userInfo.status || "Active"
         });
-        setUserTransactions(data.userTransactions);
+        setUserTransactions(data.userTransactions || []);
       }
     } catch (err) {
       console.error("API Fetch Dynamic Error:", err);
     }
   };
+
+  //  INITIAL SESSION CHECKER (Refactored)
+useEffect(() => {
+  const verifyUserSession = async () => {
+    try {
+      await fetchSettingsFromDatabase();
+
+      // Browser Cookie check Backend 
+      const response = await fetch('http://localhost:5000/api/check', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include' 
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.authenticated) {
+        setUserRole(data.role);
+        // Token Database Records
+        if (data.user && data.user.id) {
+          await fetchDatabaseRecords(data.user.id);
+          if (data.role === 'admin') {
+            setActiveView('admin');
+          }
+        }
+      } else {
+        // 💡 401 ဖြစ်တဲ့အခါ Console မှာ အနီရောင်မပြဘဲ ဒီအတိုင်း Guest အဖြစ် သတ်မှတ်လိုက်မယ်
+        setUserRole('guest');
+        console.log("Session Information: No active session found (User is Guest).");
+      }
+    } catch (error) {
+      // ဒါက တကယ့် Server ပွင့်မနေတာမျိုး (Network Down) ဖြစ်မှသာ အလုပ်လုပ်မှာပါ
+      console.error("Network link to auth engine failed:", error);
+      setUserRole('guest');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  verifyUserSession();
+}, []);
 
   const handleUpdateUserInfo = async (updatedData) => {
   if (!userInfo.id) return;
@@ -165,25 +201,49 @@ export default function Pay2PayExchange() {
   const handleLoginSuccess = (role, parsedUserData) => {
     setUserRole(role);
     setIsAuthOpen(false);
+    
     if (parsedUserData) {
       const userId = parsedUserData.id || parsedUserData._id;
+    
+      setUserInfo((prev) => ({
+        ...prev,
+        id: userId,
+        name: parsedUserData.name || prev.name,
+        phone: parsedUserData.phone || prev.phone,
+        email: parsedUserData.email || prev.email,
+        status: parsedUserData.status || "Active"
+      }));
+
       fetchDatabaseRecords(userId);
     }
+    
     if (role === 'admin') {
       setPendingView(null);
       setActiveView('admin');
       return;
     }
+    
     if (pendingView === 'exchange') {
       setActiveView('exchange');
       setPendingView(null);
       return;
     }
+    
     setActiveView('home');
     setPendingView(null);
   };
 
-  const handleLogout = () => {
+  //LOGOUT VIA COOKIE REMOVAL
+  const handleLogout = async () => {
+    try {
+      await fetch('http://localhost:5000/api/logout', {
+        method: 'POST',
+        credentials: 'include' 
+      });
+    } catch (err) {
+      console.error("Logout request failed:", err);
+    }
+
     setUserRole('guest');
     const defaultPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80";
     setUserInfo({
@@ -208,7 +268,6 @@ export default function Pay2PayExchange() {
     setActiveView(view);
   };
 
-  // Provide state settings into Context layer to enable background syncing
   const contextValue = { 
     darkMode, 
     setDarkMode, 

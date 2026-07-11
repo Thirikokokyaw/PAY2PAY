@@ -65,11 +65,17 @@ export default function AdminDashboard({ onLogout, adminData, setAdminData }) {
   ]);
   const [userSearch, setUserSearch] = useState('');
 
-  // Customer support tracking
-  const [tickets, setTickets] = useState([
-    { id: 1, txnNo: "TXN-9024", fromPay: "KBZPay", toPay: "Wave Pay", time: "Today 14:10", message: "Voucher uploaded but balance not credited yet.", status: "Pending", adminReply: null },
-    { id: 2, txnNo: "TXN-8812", fromPay: "Wave Pay", toPay: "AYA Pay", time: "Yesterday 18:22", message: "Sent wrong amount by mistake.", status: "Resolved", adminReply: "We checked the log and adjusted your transfer logic wallet node." }
-  ]);
+  //modified code
+  const [tickets, setTickets] = useState([]);
+  const loadTickets = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/tickets');
+      const data = await response.json();
+      setTickets(data);
+    } catch (error) {
+      console.error("Error loading tickets:", error);
+    }
+  };
 
   // Transaction ledger logs
   const [transactions, setTransactions] = useState([
@@ -77,8 +83,9 @@ export default function AdminDashboard({ onLogout, adminData, setAdminData }) {
   ]);
 
   // System audit trail
-  const [auditLogs] = useState([
-    { id: 1, timestamp: "2026-06-25 10:14:22", admin: "Zayar Linn", action: "Authorized Sync Matrix", ip: "192.168.1.45" }
+  //modified code
+  const [auditLogs, setAuditLogs] = useState([
+        { id: 1, timestamp: "2026-06-25 10:14:22", admin: 'Authorized Admin', action: "Authorized Sync Matrix", ip: "192.168.1.45" }
   ]);
 
   const handleToggleUserStatus = (id) => {
