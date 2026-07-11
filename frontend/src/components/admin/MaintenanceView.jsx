@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { ToggleLeft, ToggleRight, Loader2 } from 'lucide-react';
-import { ThemeContext } from '../../App.jsx'; // Make sure this path correctly points to your App.jsx location
+import { ThemeContext } from '../../App.jsx'; 
 
 const BASE_URL = 'http://localhost:5000';
 
@@ -14,8 +14,7 @@ export default function MaintenanceView({
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Consume the automatic background refresh function
-  const { refreshSettings } = useContext(ThemeContext);
+  const { refreshSettings } = useContext(ThemeContext) || {};
 
   // 1. Fetch System Settings from rates table
   useEffect(() => {
@@ -24,8 +23,9 @@ export default function MaintenanceView({
         const response = await fetch(`${BASE_URL}/api/settings`); 
         if (response.ok) {
           const data = await response.json();
-          setFeeRate(data.fee_rate);
-          setIsPlatformOnline(data.is_platform_online);
+          // FIX: Read the camelCase keys returned by the backend GET route
+          setFeeRate(data.feeRate);
+          setIsPlatformOnline(data.isPlatformOnline ? 'Y' : 'N');
         }
       } catch (error) {
         console.error("There was an error fetching data!", error);
@@ -54,13 +54,12 @@ export default function MaintenanceView({
       }
       console.log('Data Stored Successfully!');
 
-      // Triggers immediate background sync to Home & Form fields instantly
       if (refreshSettings) {
         await refreshSettings();
       }
 
       if (updatedFields.fee_rate !== undefined) {
-        alert(`Success: Service Fee Rate has been updated!.`);
+        alert(`Success: Service Fee Rate has been updated to ${updatedFields.fee_rate}%.`);
       }
 
       if (updatedFields.is_platform_online !== undefined) {
@@ -90,15 +89,15 @@ export default function MaintenanceView({
     <div className="space-y-6 animate-fadeIn">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className={`text-xl font-extrabold tracking-tight uppercase ${theme.textTitle}`}>System Settings & Operational Control</h2>
-          <p className={`text-xs mt-1 ${theme.textMuted}`}>Adjust commercial transactional rates and set public network availability gates</p>
+          <h2 className={`text-xl font-extrabold tracking-tight uppercase ${theme?.textTitle || ''}`}>System Settings & Operational Control</h2>
+          <p className={`text-xs mt-1 ${theme?.textMuted || ''}`}>Adjust commercial transactional rates and set public network availability gates</p>
         </div>
-        {isSaving && <span className="text-[10px] bg-amber-500/10 text-amber-500 px-2 py-1 rounded">Updating DB...</span>}
+        ={isSaving && <span className="text-[10px] bg-amber-500/10 text-amber-500 px-2 py-1 rounded">Updating DB...</span>}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Processing Fee Section */}
-        <div className={`border p-6 rounded-2xl space-y-4 ${theme.card}`}>
+        <div className={`border p-6 rounded-2xl space-y-4 ${theme?.card || ''}`}>
           <h3 className="text-xs font-extrabold uppercase tracking-widest text-amber-500">Create Rate</h3>
           <div>
             <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Processing Fees %</label>
@@ -106,10 +105,10 @@ export default function MaintenanceView({
               <input 
                 type="number" 
                 step="0.01"
-                value={feeRate !== undefined && feeRate !== null ? feeRate : 2}
+                value={feeRate || ''} 
                 onChange={e => setFeeRate(e.target.value)}
                 onBlur={() => handleUpdateSettings({ fee_rate: parseFloat(feeRate) })} 
-                className={`w-24 rounded-xl px-4 py-2 text-xs focus:outline-none ${theme.input}`} 
+                className={`w-24 rounded-xl px-4 py-2 text-xs focus:outline-none ${theme?.input || ''}`} 
               />
               <span className="flex items-center text-xs font-bold text-slate-400">%</span>
             </div>
@@ -117,7 +116,7 @@ export default function MaintenanceView({
         </div>
 
         {/* Emergency Maintenance Intercept Section */}
-        <div className={`border p-6 rounded-2xl space-y-4 ${theme.card}`}>
+        <div className={`border p-6 rounded-2xl space-y-4 ${theme?.card || ''}`}>
           <h3 className="text-xs font-extrabold uppercase tracking-widest text-rose-500">Emergency Maintenance Intercept</h3>
           <div className="flex items-center justify-between">
             <div>

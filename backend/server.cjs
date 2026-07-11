@@ -86,7 +86,7 @@ const saveBase64Image = (base64String) => {
     return `http://localhost:5000/uploads/${filename}`;
 };
 
-// 💡 COBOL Authentication Validator  Helper Function
+// COBOL Authentication Validator  Helper Function
 const callCobolValidator = (action, name, phone, email, password) => {
     return new Promise((resolve, reject) => {
         const args = `${action},${name || ''},${phone || ''},${email || ''},${password || ''}`;
@@ -132,7 +132,7 @@ const callExchangeValidator = (action, amount, txnTail, sender, receiver) => {
     });
 };
 
-// 💡 WALLET အားလုံးနှင့် လက်ကျန်ငွေများကို Fetch လုပ်သည့် API Route
+// WALLET  Fetch 
 app.get('/api/wallets', async (req, res) => {
     try {
         const [rows] = await db.promise().query('SELECT * FROM wallets');
@@ -143,7 +143,7 @@ app.get('/api/wallets', async (req, res) => {
     }
 });
 
-// 💡 WALLET အသစ် တည်ဆောက်သည့် API Route
+// WALLET create
 app.post('/api/wallets/create', async (req, res) => {
     try {
         const { 
@@ -183,48 +183,30 @@ app.post('/api/wallets/create', async (req, res) => {
 
 // WALLET Update COBOL Engine API Route
 app.post('/api/wallets/update-details', async (req, res) => {
-  try {
-    const { 
-      wallet_id, wallet_name, account_number, account_holder, 
-      qr_code_path, current_balance, limit_warning, is_active, isToggleAction
-    } = req.body;
+    try {
+        const { 
+            wallet_id, wallet_name, account_number, account_holder, 
+            qr_code_path, current_balance, limit_warning 
+        } = req.body;
 
-
-    let finalImagePath = qr_code_path;
-    if (qr_code_path && qr_code_path.startsWith('data:image')) {
-      finalImagePath = saveBase64Image(qr_code_path);
-    }
-
-    const runCobolEngine = (balance) => {
-      return new Promise((resolve) => {
-        if (isToggleAction && is_active) {
-          return resolve(is_active);
+        let finalImagePath = qr_code_path;
+        if (qr_code_path && qr_code_path.startsWith('data:image')) {
+            finalImagePath = saveBase64Image(qr_code_path);
         }
-        const cobolCommand = `check_balance.exe ${balance}`;
-        exec(cobolCommand, (error, stdout) => {
-          if (!error && stdout) {
-            resolve(stdout.trim().toUpperCase());
-          } else {
-            const state = Number(balance) < 1000 ? 'N' : 'Y';
-            resolve(state);
-          }
-        });
-      });
-    };
 
-    const calculatedActiveState = await runCobolEngine(current_balance);
-
-    const updateSql = `
-      UPDATE wallets 
-      SET wallet_name = ?, 
-          account_number = ?, 
-          account_holder = ?, 
-          qr_code_path = ?, 
-          current_balance = ?, 
-          limit_warning = ?, 
-          is_active = ? 
-      WHERE wallet_id = ?
-    `;
+        const runCobolEngine = (balance) => {
+            return new Promise((resolve) => {
+                const cobolCommand = `check_balance.exe ${balance}`;
+                exec(cobolCommand, (error, stdout) => {
+                    if (!error && stdout) {
+                        resolve(stdout.trim().toUpperCase());
+                    } else {
+                        const state = Number(balance) < 1000 ? 'N' : 'Y';
+                        resolve(state);
+                    }
+                });
+            });
+        };
 
         const calculatedActiveState = await runCobolEngine(current_balance);
 
@@ -894,6 +876,7 @@ app.post('/api/transactions/status-check', (req, res) => {
 
 // ADMIN PANEL USER Fetch
 app.get('/api/admin/users', async (req, res) => {
+    // FIX: Swapped COUNT(t.id) to COUNT(t.user_id) because t.id does not exist in exchange_transactions
     const query = `
         SELECT 
             u.id, 
@@ -902,7 +885,7 @@ app.get('/api/admin/users', async (req, res) => {
             u.email, 
             u.status, 
             u.isBlacklisted,
-            COUNT(t.id) AS totalTxns
+            COUNT(t.user_id) AS totalTxns
         FROM users u
         LEFT JOIN exchange_transactions t ON u.id = t.user_id
         WHERE u.role = 'user' OR u.role IS NULL OR u.role = ''
@@ -933,6 +916,8 @@ app.get('/api/admin/users', async (req, res) => {
 });
 
 // USER STATUS 
+// Note: Keep this route as-is since your React app uses it inside 'handleToggleUserStatus' 
+// fetching 'http://localhost:5000/api/admin/users/${userId}/status'
 app.put('/api/admin/users/:id/status', (req, res) => {
     const userId = req.params.id;
     const { status } = req.body;
@@ -945,24 +930,11 @@ app.put('/api/admin/users/:id/status', (req, res) => {
         if (err) return res.status(500).json({ message: 'Failed to sync status properties.' });
         res.status(200).json({ message: `User status altered to ${status} successfully.` });
     });
-});
+}); 
 
-// USER Block / Active 
-app.put('/api/admin/users/:id/toggle-block', (req, res) => {
-    const userId = req.params.id;
-    
-    db.query('SELECT status FROM users WHERE id = ?', [userId], (err, results) => {
-        if (err || results.length === 0) return res.status(404).json({ message: 'User not found' });
-        
-        const currentStatus = results[0].status;
-        const newStatus = currentStatus === 'Active' ? 'Blocked' : 'Active';
-        
-        db.query('UPDATE users SET status = ? WHERE id = ?', [newStatus, userId], (err) => {
-            if (err) return res.status(500).json({ message: 'Failed to update status' });
-            res.status(200).json({ message: `User account has been ${newStatus.toLowerCase()}.` });
-        });
-    });
-});
+// USER Block / Active Toggle
+// CLEANUP NOTE: You can safely delete or keep the '/api/admin/users/:id/toggle-block' route.
+// Your frontend relies on the explicit JSON payload route above (`/:id/status`), rendering this one redundant.
 
 // USER Blacklist 
 app.put('/api/admin/users/:id/toggle-blacklist', (req, res) => {
@@ -981,8 +953,77 @@ app.put('/api/admin/users/:id/toggle-blacklist', (req, res) => {
 
         db.query('UPDATE users SET isBlacklisted = ? WHERE id = ?', [nextBlacklistState, userId], (updateErr) => {
             if (updateErr) return res.status(500).json({ message: 'Failed to update blacklist status' });
-            res.status(200).json({ message: `User blacklist status updated to ${nextBlacklistState}.` });
+            
+            // FIX: Your React component triggers an alert with data.message. 
+            // Changing this to a clean string instead of the raw binary integer makes for a better UI experience.
+            const feedbackString = nextBlacklistState === 1 ? "added to the blacklist" : "removed from the blacklist";
+            res.status(200).json({ message: `User has been successfully ${feedbackString}.` });
         });
+    });
+});
+
+// USER Block / Active Toggle
+app.put('/api/admin/users/:id/toggle-block', (req, res) => {
+    const userId = req.params.id;
+    
+    // An inline conditional (IF) updates 'Active' to 'Blocked' and vice-versa in 1 step
+    const query = `
+        UPDATE users 
+        SET status = IF(status = 'Active', 'Blocked', 'Active') 
+        WHERE id = ?
+    `;
+
+    db.query(query, [userId], (err, result) => {
+        if (err) {
+            console.error("Block status sync failure:", err);
+            return res.status(500).json({ message: 'Failed to update user status.' });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'User record not located.' });
+        }
+        
+        res.status(200).json({ message: "User status flipped successfully." });
+    });
+});
+
+// USER Blacklist Toggle
+app.put('/api/admin/users/:id/toggle-blacklist', (req, res) => {
+    const userId = req.params.id;
+    
+    // Flips a 1 to 0 or a 0 to 1 instantly using a XOR operator (isBlacklisted ^ 1)
+    // COALESCE ensures it defaults safely to 0 if the field is currently NULL
+    const query = `
+        UPDATE users 
+        SET isBlacklisted = COALESCE(isBlacklisted, 0) ^ 1 
+        WHERE id = ?
+    `;
+
+    db.query(query, [userId], (err, result) => {
+        if (err) {
+            console.error("Blacklist toggle failure:", err);
+            return res.status(500).json({ message: 'Failed to update blacklist status.' });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'User record not located.' });
+        }
+
+        res.status(200).json({ message: "User flag criteria modified." });
+    });
+});
+
+// Route to check a single user's live status during wallet sync
+app.get('/api/users/:id', (req, res) => {
+    const userId = req.params.id;
+    const query = 'SELECT id, status, isBlacklisted FROM users WHERE id = ?';
+
+    db.query(query, [userId], (err, results) => {
+        if (err) {
+            return res.status(500).json({ message: "Database lookup error" });
+        }
+        if (results.length === 0) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        res.status(200).json(results[0]);
     });
 });
 
