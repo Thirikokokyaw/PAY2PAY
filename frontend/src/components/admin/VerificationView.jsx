@@ -1,56 +1,79 @@
-import React, { useState } from 'react';
-import { Check, X, Bell, Loader2 } from 'lucide-react'; 
+import React, { useState, useEffect } from 'react';
+import { Check, X, Bell, Loader2, RefreshCw } from 'lucide-react'; 
 
 export default function VerificationView({ theme, transactions, setTransactions }) {
   const [loadingId, setLoadingId] = useState(null);
+  const [fetching, setFetching] = useState(false);
 
+  // ─── ၁။ DATABASE မှ PENDING ဖြစ်နေသော TRANSACTION များ ဆွဲထုတ်ခြင်း ───
+  const fetchPendingTransactions = async () => {
+    setFetching(true);
+    try {
+      // မှတ်ချက်- သင်၏ API configurations အလိုက် လမ်းကြောင်းကို လိုအပ်သလို ပြောင်းလဲနိုင်သည်
+      const response = await fetch('http://localhost:5000/api/admin/pending-transactions');
+      const data = await response.json();
+      if (response.ok) {
+        setTransactions(data.transactions || data); 
+      }
+    } catch (error) {
+      console.error("Database fetch failed:", error);
+    } finally {
+      setFetching(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPendingTransactions();
+  }, []);
+
+  // ─── ၂။ APPROVE သို့မဟုတ် CANCEL ACTION များ လုပ်ဆောင်ခြင်း ───
   const handleVerifyTxn = async (txn, action) => {
-    const transactionId = txn.txn_id || txn.id; 
+    const transactionId = txn.id || txn.txn_id; 
     setLoadingId(transactionId);
 
     try {
       if (action === 'approve') {
-        // ─── APPROVE LOGIC ───
-        // Backend text block logic 
+        // Backend ရှိ /api/admin/approve-transaction endpoint သို့ ချိတ်ဆက်ခြင်း
         const response = await fetch('http://localhost:5000/api/admin/approve-transaction', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             transactionId: transactionId,
-            amount: txn.send_amount || txn.amount,
-            txnIdTail: txn.txn_id_tail || txn.code,
-            sender: txn.sender_phone || txn.phone,
-            receiver: txn.receiver_phone,
-            toWallet: txn.to_wallet
+            toWallet: txn.to_wallet // COBOL ဘက်က ပစ်မှတ် Wallet ထဲမှ လက်ခံမည့် amount ကို လျှော့ချ/ညှိနှိုင်းရန်
           })
         });
 
         const data = await response.json();
 
         if (response.ok && data.success) {
-          // Pending to Success (Status '1')
           setTransactions(prev => 
-            prev.map(t => (t.txn_id === transactionId || t.id === transactionId) ? { ...t, status: 'Success' } : t)
+            prev.map(t => (t.id === transactionId || t.txn_id === transactionId) ? { ...t, status: '1' } : t)
           );
-          alert(data.message || 'Transaction approved and funds settled!');
+          alert(data.message || 'Transaction approved and funds settled via COBOL!');
         } else {
-          alert(`Approval Error: ${data.message || 'Failed to process via COBOL engine'}`);
+          alert(`Approval Error: ${data.message || 'Failed to process'}`);
         }
 
       } else {
-        // ─── CANCEL / REJECT LOGIC ───
-        // Cancel  status 'Rejected' ( '2') 
-        const response = await fetch(`http://localhost:5000/api/admin/users/status`, {
+        // Backend ရှိ /api/admin/cancel-transaction endpoint သို့ တိုက်ရိုက်ချိတ်ဆက်ခြင်း
+        const response = await fetch('http://localhost:5000/api/admin/cancel-transaction', {
           method: 'POST', 
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transactionId: transactionId, status: '2' }) 
+          body: JSON.stringify({ 
+            transactionId: transactionId 
+          }) 
         });
 
-        // Frontend data filter state update 
-        setTransactions(prev => 
-          prev.map(t => (t.txn_id === transactionId || t.id === transactionId) ? { ...t, status: 'Rejected' } : t)
-        );
-        alert('Transaction cancelled successfully.');
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          setTransactions(prev => 
+            prev.map(t => (t.id === transactionId || t.txn_id === transactionId) ? { ...t, status: '2' } : t)
+          );
+          alert(data.message || 'Transaction cancelled. Ledger state correctly adjusted back.');
+        } else {
+          alert(`Cancellation Error: ${data.message || 'Failed to cancel transaction'}`);
+        }
       }
     } catch (error) {
       console.error("Verification processing failed:", error);
@@ -60,14 +83,23 @@ export default function VerificationView({ theme, transactions, setTransactions 
     }
   };
 
-  // Database standard  0 'Pending' 
-  const pendingTransactions = transactions.filter(t => t.status === 'Pending' || t.status === '0');
+  // Status '0' (Pending) များကိုသာ စစ်ဆေးရန် စစ်ထုတ်ခြင်း
+  const pendingTransactions = transactions.filter(t => t.status === '0' || t.status === 0);
 
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Header section */}
       <div className="flex justify-between items-center">
-        <h2 className={`text-xl font-extrabold uppercase ${theme.textTitle}`}>Voucher Auditing Desk</h2>
+        <div className="flex items-center gap-3">
+          <h2 className={`text-xl font-extrabold uppercase ${theme.textTitle}`}>Voucher Auditing Desk</h2>
+          <button 
+            onClick={fetchPendingTransactions} 
+            disabled={fetching}
+            className="p-1.5 rounded-lg border hover:bg-slate-500/10 transition-colors"
+          >
+            <RefreshCw size={14} className={`${fetching ? 'animate-spin' : ''} ${theme.textTitle}`} />
+          </button>
+        </div>
         
         <button className={`p-2 rounded-xl border relative transition-colors ${theme.tableBg} hover:opacity-80`}>
           <Bell size={20} className={theme.textTitle} />
@@ -89,7 +121,15 @@ export default function VerificationView({ theme, transactions, setTransactions 
               </tr>
             </thead>
             <tbody className="divide-y">
-              {pendingTransactions.length === 0 ? (
+              {fetching ? (
+                <tr>
+                  <td colSpan="4" className="p-8 text-center font-bold text-slate-400">
+                    <div className="flex justify-center items-center gap-2">
+                      <Loader2 size={16} className="animate-spin" /> ဇယားအချက်အလက်များရယူနေသည်...
+                    </div>
+                  </td>
+                </tr>
+              ) : pendingTransactions.length === 0 ? (
                 <tr>
                   <td colSpan="4" className="p-8 text-center font-bold text-slate-400">
                     No pending vouchers to review.
@@ -97,15 +137,18 @@ export default function VerificationView({ theme, transactions, setTransactions 
                 </tr>
               ) : (
                 pendingTransactions.map(txn => {
-                  const currentId = txn.txn_id || txn.id;
+                  const currentId = txn.id || txn.txn_id;
                   const sendAmt = txn.send_amount || txn.amount || 0;
                   const receiveAmt = txn.receive_amount || (sendAmt * 0.98);
 
                   return (
                     <tr key={currentId} className="font-medium">
                       <td className="p-2 sm:p-4">
-                        <p className={`font-bold ${theme.textTitle}`}>{txn.sender_name || txn.name || 'Unknown'}</p>
-                        <p className="text-[11px] text-slate-400 font-mono">{txn.sender_phone || txn.phone}</p>
+                        <p className={`font-bold ${theme.textTitle}`}>{txn.sender_name || 'Unknown'}</p>
+                        <p className="text-[11px] text-slate-400 font-mono">From: {txn.sender_phone}</p>
+                        {txn.receiver_phone && (
+                          <p className="text-[11px] text-slate-400 font-mono">To: {txn.receiver_name} ({txn.receiver_phone})</p>
+                        )}
                       </td>
                       <td className="p-2 sm:p-4">
                         <span className="px-2 py-0.5 text-[10px] rounded-md font-bold bg-slate-500/10 text-slate-400 mr-2">
@@ -114,10 +157,11 @@ export default function VerificationView({ theme, transactions, setTransactions 
                         <span className="font-mono font-bold text-amber-500 bg-amber-500/5 px-2 py-1 rounded">
                           {txn.txn_id_tail || txn.code}
                         </span>
+                        {txn.created_at && <p className="text-[10px] text-slate-400 mt-1">{txn.created_at}</p>}
                       </td>
                       <td className="p-2 sm:p-4">
-                        <p className={`font-bold ${theme.textTitle}`}>{sendAmt.toLocaleString()} MMK (Sent)</p>
-                        <p className="text-[11px] text-emerald-500 font-semibold">{receiveAmt.toLocaleString()} MMK (Net Recv)</p>
+                        <p className={`font-bold ${theme.textTitle}`}>{Number(sendAmt).toLocaleString()} MMK (Sent)</p>
+                        <p className="text-[11px] text-emerald-500 font-semibold">{Number(receiveAmt).toLocaleString()} MMK (Net Recv)</p>
                       </td>
                       <td className="p-2 sm:p-4 text-right space-x-1 sm:space-x-2 whitespace-nowrap">
                         {loadingId === currentId ? (
