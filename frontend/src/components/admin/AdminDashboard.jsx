@@ -28,16 +28,12 @@ import MaintenanceView from './MaintenanceView';
 import AuditLogsView from './AuditLogsView';
 import SupportTicketsView from './SupportTicketsView';
 import ProfileView from './ProfileView';
-
-export default function AdminDashboard({ onLogout }) {
-  const [adminData, setAdminData] = useState({
-    name: "Zayar Linn",
-    role: "Super Admin",
-    phone: "09 777 123 456",
-    email: "zayarlinn@pay2pay.com",
-    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop" // Sample Image
-  });
+///
+export default function AdminDashboard({ onLogout, adminData, setAdminData }) {
+  
   const [isDarkMode, setIsDarkMode] = useState(false);
+  ///
+
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeView, setActiveView] = useState('dashboard');
@@ -138,7 +134,15 @@ export default function AdminDashboard({ onLogout }) {
           />
         );
       case 'audit': return <AuditLogsView theme={theme} isDarkMode={isDarkMode} auditLogs={auditLogs} />;
-      case 'profile': return <ProfileView theme={theme} isDarkMode={isDarkMode} adminData={adminData} setAdminData={setAdminData} />;
+      case 'profile': 
+  return (
+    <ProfileView 
+      theme={theme} 
+      isDarkMode={isDarkMode} 
+      adminData={adminData} 
+      setAdminData={setAdminData} 
+    />
+  );
       default: return <DiagnosticsView theme={theme} isDarkMode={isDarkMode} />;
     }
   };
@@ -167,7 +171,7 @@ export default function AdminDashboard({ onLogout }) {
                     }`}
                     title="Collapse Sidebar"
                   >
-                    <ChevronLeft size={16} />
+                    <Menu size={16} />
                   </button>
                 </div>
               </div>
@@ -208,7 +212,21 @@ export default function AdminDashboard({ onLogout }) {
             })}
           </nav>
         </div>
-      </aside>
+       <div className={`p-4 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-500/10'}`}>
+  <button
+    onClick={onLogout}
+    className={`w-full rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer border ${
+      isDarkMode 
+        ? 'border-slate-800 bg-slate-900 text-rose-400 hover:bg-slate-800' 
+        : 'border-rose-300 bg-rose-50 text-rose-600 hover:bg-rose-100'
+    } ${isSidebarCollapsed ? 'p-3' : 'py-2.5 px-4'}`}
+    title="Logout"
+  >
+    <LogOut size={16} strokeWidth={2.5} />
+    {!isSidebarCollapsed && <span>Logout</span>}
+  </button>
+</div>
+      </aside> 
 
       {/* 2. MOBILE TOPBAR */}
       <div className={`md:hidden flex items-center justify-between px-4 py-4 border-b ${theme.header}`}>
@@ -232,60 +250,82 @@ export default function AdminDashboard({ onLogout }) {
       </div>
 
       {/* 3. MOBILE MENU DRAWER */}
-      {isMenuOpen && (
-        <div className="fixed inset-0 z-50 md:hidden flex">
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)} />
-          <div className={`relative w-4/5 max-w-sm flex flex-col justify-between h-full p-4 border-r transition-colors duration-300 ${theme.sidebar}`}>
-            <div>
-              <div className="flex items-center justify-between pb-4 mb-4 border-b">
-                <span className="text-sm font-black tracking-wider text-amber-500">PAY2PAY CONTROL</span>
-                <button onClick={() => setIsMenuOpen(false)} className={`p-2 rounded-xl border cursor-pointer ${isDarkMode ? 'border-slate-700 bg-slate-800 text-amber-400' : 'border-slate-200 bg-white text-amber-600'}`}>
-                  <X size={20} />
-                </button>
+{isMenuOpen && (
+  <div className="fixed inset-0 z-50 md:hidden flex">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)} />
+    <div className={`relative w-4/5 max-w-sm flex flex-col justify-between h-full p-4 border-r transition-colors duration-300 ${theme.sidebar}`}>
+      <div>
+        {/* Mobile Profile Header - Mobile */}
+        
+          <button 
+          onClick={() => { setActiveView('profile'); setIsMenuOpen(false); }}
+          className={`w-full flex items-center gap-3 pb-4 mb-4 border-b text-left cursor-pointer focus:outline-none ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}
+        >
+          {/* data retrieve  */}
+         <div className="h-8 w-8 rounded-full overflow-hidden border border-amber-500/30 flex items-center justify-center shrink-0">
+        <img src={adminData.avatar || adminData.profile_photo || adminData.avatarUrl} alt="Admin" className="w-full h-full object-cover" />
+      </div>
+      <div className="hidden lg:block">
+        <p className={`text-xs font-black tracking-tight leading-none ${theme.textTitle}`}>{adminData.name}</p>
+        <p className="text-[10px] text-amber-500 font-bold leading-none mt-1">{adminData.role}</p>
+      </div>
+       {/* data retrieve  */}
+        </button>
+       
+        {/* Navigation links */}
+        <nav className="space-y-1.5">
+          {navigationItems.map(item => (
+            <button
+              key={item.id}
+              onClick={() => { setActiveView(item.id); setIsMenuOpen(false); }}
+              className={`w-full px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer group ${activeView === item.id ? 'bg-amber-500 text-slate-950' : `${theme.textMuted} hover:bg-slate-500/10`}`}
+            >
+              <div className="flex items-center gap-3">
+                {item.icon}
+                {item.label}
               </div>
-              <nav className="space-y-1.5">
-                {navigationItems.map(item => (
-                  <button
-                    key={item.id}
-                    onClick={() => { setActiveView(item.id); setIsMenuOpen(false); }}
-                    className={`w-full px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer group ${activeView === item.id ? 'bg-amber-500 text-slate-950' : `${theme.textMuted} hover:bg-slate-500/10`}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {item.icon}
-                      {item.label}
-                    </div>
-                    {item.count > 0 && (
-                      <span className="bg-slate-950 text-amber-400 text-[10px] px-2 py-0.5 rounded-full font-black">{item.count}</span>
-                    )}
-                  </button>
-                ))}
-                <button
-                  onClick={() => { setActiveView('profile'); setIsMenuOpen(false); }}
-                  className={`w-full px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${activeView === 'profile' ? 'bg-amber-500 text-slate-950' : `${theme.textMuted} hover:bg-slate-500/10`}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <User size={16} />
-                    Profile
-                  </div>
-                </button>
-              </nav>
-            </div>
-            <div className="pt-4 border-t border-slate-800">
-              <button onClick={() => setIsDarkMode(!isDarkMode)} className="w-full flex items-center justify-between mb-4 px-2 text-xs font-bold cursor-pointer">
-                <span>Toggle Theme</span>
-                {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-              </button>
-              <button 
-                onClick={onLogout} 
-                className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 rounded-xl text-xs font-extrabold transition-all hover:brightness-110 shadow-sm cursor-pointer"
-              >
-                Exit Session
-              </button>
-            </div>
+              {item.count > 0 && (
+                <span className="bg-slate-950 text-amber-400 text-[10px] px-2 py-0.5 rounded-full font-black">{item.count}</span>
+              )}
+            </button>
+          ))}
+          {/* data retrieve  */}
+          <button
+          onClick={() => { setActiveView('profile'); setIsMenuOpen(false); }}
+          className={`w-full px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${activeView === 'profile' ? 'bg-amber-500 text-slate-950' : `${theme.textMuted} hover:bg-slate-500/10`}`}
+        >
+          <div className="flex items-center gap-3">
+            <User size={16} />
+            Profile Settings
           </div>
-        </div>
-      )}
+        </button>
+          {/* data retrieve  */}
+        </nav>
+      </div>
 
+      {/* Bottom Actions Area */}
+      <div className={`pt-4 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+        <button onClick={() => setIsDarkMode(!isDarkMode)} className="w-full flex items-center justify-between mb-4 px-2 text-xs font-bold cursor-pointer">
+          <span>Toggle Theme</span>
+          {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+        
+        {/* Mobile Logout Button - Desktop  */}
+        <button 
+          onClick={onLogout} 
+          className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border cursor-pointer ${
+            isDarkMode 
+              ? 'border-slate-800 bg-slate-900 text-rose-400 hover:bg-slate-800' 
+              : 'border-rose-300 bg-rose-50 text-rose-600 hover:bg-rose-100'
+          }`}
+        >
+          <LogOut size={14} strokeWidth={2.5} />
+          <span>Logout</span>
+        </button>
+      </div>
+    </div>
+  </div>
+)}
       {/* 4. MAIN WORKSPACE */}
       <div className="flex-grow flex flex-col min-w-0">
         
@@ -330,46 +370,16 @@ export default function AdminDashboard({ onLogout }) {
                 title="View Profile Details"
               >
               
-                <div className="h-8 w-8 rounded-full overflow-hidden border border-amber-500/30 flex items-center justify-center shrink-0">
-                  <img src={adminData.avatarUrl} alt="Admin" className="w-full h-full object-cover" />
-                </div>
-                <div className="hidden lg:block">
-                  <p className={`text-xs font-black tracking-tight leading-none ${theme.textTitle}`}>{adminData.name}</p>
-                  <p className="text-[10px] text-amber-500 font-bold leading-none mt-1">{adminData.role}</p>
-                </div>
+                <div className="h-10 w-10 rounded-full overflow-hidden border border-amber-500/30 flex items-center justify-center shrink-0">
+                <img src={adminData.avatar || adminData.profile_photo || adminData.avatarUrl} alt="Admin" className="w-full h-full object-cover" />
+              </div>
+              <div className="flex-grow min-w-0">
+                <p className={`text-xs font-black tracking-tight leading-none truncate ${theme.textTitle}`}>{adminData.name}</p>
+                <p className="text-[10px] text-amber-500 font-bold leading-none mt-1">{adminData.role}</p>
+              </div>
               </button>
 
-              {/* More Actions Toggle */}
-              <div className="relative flex items-center">
-                <button
-                  onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className={`p-2 rounded-xl transition-all duration-200 cursor-pointer focus:outline-none text-slate-400 ${
-                    isDarkMode ? 'hover:bg-slate-400/5' : 'hover:bg-slate-500/10'
-                  } ${isProfileOpen ? (isDarkMode ? 'bg-slate-400/5' : 'bg-slate-500/10') : ''}`}
-                  title="Account Settings"
-                >
-                  <MoreHorizontal size={16} />
-                </button>
-
-                {/* Dropdown Box */}
-                {isProfileOpen && (
-                  <div className={`absolute right-0 top-[44px] w-48 rounded-xl border p-1.5 z-50 transition-all ${theme.dropdown}`}>
-                    <div className={`px-3 py-2 text-[10px] font-bold tracking-wider uppercase border-b mb-1 ${isDarkMode ? 'text-slate-500 border-slate-800' : 'text-slate-400 border-slate-100'}`}>
-                      Account Options
-                    </div>
-                    <button
-                      onClick={() => {
-                        setIsProfileOpen(false);
-                        onLogout();
-                      }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all text-left cursor-pointer"
-                    >
-                      <LogOut size={14} className="shrink-0" />
-                      <span>Exit Session</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+              
 
             </div>
 
