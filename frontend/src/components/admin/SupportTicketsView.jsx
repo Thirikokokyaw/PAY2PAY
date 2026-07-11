@@ -1,25 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { CornerDownLeft, Reply } from 'lucide-react';
+import { CornerDownLeft, Reply, Bell } from 'lucide-react';
 
 export default function SupportTicketsView({ theme, isDarkMode, tickets, setTickets }) {
   const [replyText, setReplyText] = useState({});
 
-  // 1. Fetch tickets directly from backend storage configuration
+  // Fetch tickets from the database
   const fetchTickets = async () => {
     try {
       const response = await fetch('http://localhost:5000/api/tickets');
       const data = await response.json();
       setTickets(data);
     } catch (error) {
-      console.error("Error fetching tickets array payload:", error);
+      console.error("Error fetching tickets:", error);
     }
   };
 
+  // Load data when component mounts
   useEffect(() => {
     fetchTickets();
   }, []);
 
-  // 2. Dispatch Reply Handler
   const handleSendReply = async (ticketId) => {
     if (!replyText[ticketId]?.trim()) return;
 
@@ -32,23 +32,23 @@ export default function SupportTicketsView({ theme, isDarkMode, tickets, setTick
 
       if (response.ok) {
         setReplyText(prev => ({ ...prev, [ticketId]: '' }));
-        fetchTickets(); // Refresh state log automatically on response confirmation
+        fetchTickets(); // Refresh list to reflect changes
       }
     } catch (error) {
-      console.error("Error updating admin dispatch reply:", error);
+      console.error("Error updating reply:", error);
     }
   };
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      {/* View Header Meta info */}
-      <div>
-        <h2 className={`text-xl font-extrabold uppercase ${theme.textTitle}`}>Customer Support Inbound</h2>
-        <p className={`text-xs mt-1 ${theme.textMuted}`}>Review transfer discrepancies and transmit dispatch solutions</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className={`text-xl font-extrabold uppercase ${theme.textTitle}`}>Customer Support Inbound</h2>
+          <p className={`text-xs mt-1 ${theme.textMuted}`}>Review transfer discrepancies and transmit dispatch solutions</p>
+        </div>
       </div>
 
-      {/* Scrollable Container Module for handling high volume data tracking */}
-      <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-2 custom-scrollbar">
+      <div className="space-y-4">
         {tickets.length > 0 ? (
           tickets.map((ticket) => (
             <div 
@@ -68,7 +68,6 @@ export default function SupportTicketsView({ theme, isDarkMode, tickets, setTick
                 
                 <p className={`text-xs font-medium pl-1 ${theme.textTitle}`}>{ticket.user_message}</p>
 
-                {/* Display Admin reply block state cleanly beneath message payload if exists */}
                 {ticket.admin_reply && (
                   <div className={`mt-3 p-3 rounded-xl border text-xs font-sans font-medium flex items-start gap-2 ${isDarkMode ? 'bg-slate-950/60 border-slate-800 text-emerald-400' : 'bg-slate-50 border-slate-200 text-emerald-700'}`}>
                     <CornerDownLeft size={14} className="mt-0.5 shrink-0" />
@@ -80,7 +79,6 @@ export default function SupportTicketsView({ theme, isDarkMode, tickets, setTick
                 )}
               </div>
 
-              {/* Only reveal active reply dispatcher input field if ticket is Pending state */}
               {ticket.status === 'Pending' && (
                 <div className="md:w-72 shrink-0 flex flex-col gap-2 justify-end">
                   <input 
@@ -92,7 +90,7 @@ export default function SupportTicketsView({ theme, isDarkMode, tickets, setTick
                   />
                   <button 
                     onClick={() => handleSendReply(ticket.id)} 
-                    className="w-full py-1.5 bg-amber-500 text-slate-950 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 uppercase tracking-wider hover:opacity-90 transition-opacity"
+                    className="w-full py-1.5 bg-amber-500 text-slate-950 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 uppercase tracking-wider"
                   >
                     <Reply size={13} /> Dispatch Reply
                   </button>

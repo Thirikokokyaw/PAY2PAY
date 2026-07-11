@@ -93,6 +93,7 @@ export default function Pay2PayExchange() {
           name: data.userInfo.name,
           phone: data.userInfo.phone,
           email: data.userInfo.email,
+          role: data.userInfo.role,
           avatar: photoUrl,
           profile_photo: photoUrl,
           status: data.userInfo.status || "Active"
@@ -146,40 +147,50 @@ useEffect(() => {
 }, []);
 
   const handleUpdateUserInfo = async (updatedData) => {
-    if (!userInfo.id) return;
-    try {
-      const newPhoto = updatedData.profile_photo || updatedData.avatar;
-      const payload = {
-        name: updatedData.name,
-        phone: updatedData.phone,
-        email: updatedData.email,
-        profile_photo: newPhoto
-      };
+  if (!userInfo.id) return;
+  try {
+    const newPhoto = updatedData.profile_photo || updatedData.avatar;
+    
+    // Construct the correct payload capturing the new password safely
+    const payload = {
+      name: updatedData.name,
+      phone: updatedData.phone,
+      phone_number: updatedData.phone,
+      email: updatedData.email,
+      profile_photo: newPhoto,
+      password: updatedData.password // Capturing the new password from ProfileView
+    };
 
-      setUserInfo((prev) => ({
-        ...prev,
-        name: updatedData.name,
-        phone: updatedData.phone,
-        email: updatedData.email,
-        avatar: newPhoto,
-        profile_photo: newPhoto
-      }));
+    // Update frontend state first
+    setUserInfo((prev) => ({
+      ...prev,
+      name: updatedData.name,
+      phone: updatedData.phone,
+      email: updatedData.email,
+      avatar: newPhoto,
+      profile_photo: newPhoto
+    }));
 
-      const response = await fetch(`http://localhost:5000/api/user-node/update/${userInfo.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      if (response.ok) {
-        fetchDatabaseRecords(userInfo.id); 
-      } else {
-        alert("Failed to save response to database");
-      }
-    } catch (err) {
-      alert("Connection to database failed");
+    // Call Backend API
+    const response = await fetch(`http://localhost:5000/api/user-node/update/${userInfo.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      // Re-fetch to sync database with frontend state controller
+      await fetchDatabaseRecords(userInfo.id); 
+      alert("Password and Profile updated successfully in Database!");
+    } else {
+      alert(result.error || "Failed to save response to database");
     }
-  };
+  } catch (err) {
+    alert("Connection to database failed");
+  }
+};
 
   const handleCopy = (text, field) => {
     navigator.clipboard.writeText(text);
@@ -263,26 +274,21 @@ useEffect(() => {
     refreshSettings: fetchSettingsFromDatabase 
   };
 
-  if (loading) {
-    return (
-      <div className={`min-h-screen flex items-center justify-center font-sans ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-        <div className="text-center space-y-2">
-          <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-sm font-bold tracking-wide">Securing Exchange Node Tunnel...</p>
-        </div>
+   {/* admin data retrieve su*/}
+ if (userRole === 'admin' && activeView === 'admin') {
+  return (
+    <ThemeContext.Provider value={contextValue}>
+      <div className={`min-h-screen ${darkMode ? 'bg-slate-950 text-slate-50' : 'bg-slate-50 text-slate-900'}`}>
+        
+        <AdminDashboard 
+          onLogout={handleLogout} 
+          adminData={userInfo} 
+          setAdminData={handleUpdateUserInfo} 
+        />
       </div>
-    );
-  }
-
-  if (userRole === 'admin' && activeView === 'admin') {
-    return (
-      <ThemeContext.Provider value={contextValue}>
-        <div className={`min-h-screen ${darkMode ? 'bg-slate-950 text-slate-50' : 'bg-slate-50 text-slate-900'}`}>
-          <AdminDashboard onLogout={handleLogout} />
-        </div>
-      </ThemeContext.Provider>
-    );
-  }
+    </ThemeContext.Provider>
+  );
+}
 
   return (
     <ThemeContext.Provider value={contextValue}>

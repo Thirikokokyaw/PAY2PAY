@@ -3,7 +3,7 @@ import { ThemeContext } from '../App';
 import { 
   Clock, ArrowRight, Camera, User, Phone, Mail, LogOut, 
   Pencil, RefreshCw, ArrowUpRight, ArrowDownLeft, Calendar, 
-  CheckCircle, Download, X, FileText, HelpCircle, Send
+  CheckCircle, Download, X, FileText, HelpCircle, Send, AlertCircle
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { io } from 'socket.io-client';
@@ -89,6 +89,11 @@ export default function ProfileSection({
       // Refresh currently opened voucher viewport context if the user is reviewing it live
       setSelectedTxn((currentTxn) => {
         if (currentTxn && currentTxn.txn_id === updatedTxn.txn_id) {
+          // If the live update turns the active transaction into "Pending", automatically close it
+          if (String(updatedTxn.status) === "0") {
+            setShowVoucher(false);
+            return null;
+          }
           return { ...currentTxn, status: updatedTxn.status };
         }
         return currentTxn;
@@ -102,75 +107,123 @@ export default function ProfileSection({
     };
   }, [userInfo?.id]);
 
-  // Sync state if userInfo updates from parent/database props
   useEffect(() => {
-    setEditName(userInfo.name);
-    setEditPhone(userInfo.phone);
-    setEditEmail(userInfo.email);
-    setTempAvatar(userInfo.profile_photo);
-  }, [userInfo]);
+    const fetchTickets = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/tickets');
+        const data = await response.json();
+        
+        const formattedTickets = data.map(t => ({
+          id: `TKT-${t.id}`, 
+          status: t.status,
+          route: t.route,
+          txn: t.txn_no,
+          userMsg: t.user_message,
+          sysReply: t.admin_reply || "Awaiting response..."
+        }));
+        
+        setSupportTickets(formattedTickets);
+      } catch (error) {
+        console.error("Error fetching tickets:", error);
+      }
+    };
 
-  const handleSaveChanges = async (e) => {
-    e.preventDefault();
-    if(setUserInfo) {
-      setUserInfo({ 
-        ...userInfo, 
-        name: editName, 
-        phone: editPhone, 
-        email: editEmail, 
-        profile_photo: tempAvatar 
-      });
+    if (activeTab === 'support') {
+      fetchTickets();
     }
-    setIsEditing(false);
-    alert("Profile details have been updated in the database system successfully.");
-  };
+  }, [activeTab]);
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setTempAvatar(reader.result); // Transform image file into base64 string
+        setTempAvatar(reader.result); 
       }; 
       reader.readAsDataURL(file);
     }
   };
 
-  // Support Ticket Form Submit Handler
-  const handleSupportSubmit = (e) => {
+  const handleSupportSubmit = async (e) => {
     e.preventDefault();
-    const newTicket = {
-      id: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
-      status: "Pending Review",
-      route: `${fromPay} ➔ ${toPay}`,
-      txn: supportTxnNo,
-      userMsg: supportMessage,
-      sysReply: "Awaiting customer support response..."
+    
+    const ticketData = {
+      userId: userInfo.id, 
+      fromPay,
+      toPay,
+      txnNo: supportTxnNo,
+      message: supportMessage
     };
-    setSupportTickets([newTicket, ...supportTickets]);
-    setSupportTxnNo('');
-    setSupportMessage('');
-    alert("Support Ticket submitted to helpdesk system successfully.");
+
+    try {
+      const response = await fetch('http://localhost:5000/api/tickets/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ticketData)
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert("Ticket submitted successfully!");
+        setSupportTxnNo('');
+        setSupportMessage('');
+      }
+    } catch (error) {
+      console.error("Submission Error:", error);
+    }
   };
 
   const downloadVoucherHandle = async () => {
-    if (!voucherRef.current) return;
+    const element = voucherRef.current;
+    if (!element) return;
+    
     try {
-      const canvas = await html2canvas(voucherRef.current, {
+      // Force inline styling rules temporarily to guarantee correct heights
+      const originalStyle = element.style.cssText;
+      element.style.transform = 'none';
+      element.style.letterSpacing = 'normal';
+      
+      // Execute capture with strict formatting settings
+      const canvas = await html2canvas(element, {
         useCORS: true,
+        allowTaint: false, // Set to false to avoid cross-origin tainted canvas locks
         scale: 2,
-        backgroundColor: "#0f172a", 
-        logging: false
+        backgroundColor: isDarkMode ? "#0f172a" : "#ffffff",
+        logging: false,
+        scrollX: 0,
+        scrollY: -window.scrollY, // Negate scroll positions to prevent offset cutoff bugs
+        windowWidth: document.documentElement.offsetWidth,
+        windowHeight: document.documentElement.offsetHeight,
       });
-      const image = canvas.toDataURL("image/png");
+
+      // Restore baseline component configurations
+      element.style.cssText = originalStyle;
+
+      const image = canvas.toDataURL("image/png", 1.0);
       const link = document.createElement("a");
-      link.href = image;
-      link.download = `Voucher-TXN${selectedTxn?.txn_id}.png`;
+      
+      // Cross-platform compatible virtual pointer download event trigger
+      link.setAttribute("href", image);
+      link.setAttribute("download", `Voucher-TXN-${selectedTxn?.id || 'Receipt'}.png`);
+      link.style.display = "none";
+      
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     } catch (error) {
-      console.error("Voucher download error:", error);
-      alert("Voucher download error!!!");
+      console.error("Critical rendering failure details:", error);
+      alert("Failed to compile receipt image engine natively. Please take a screenshot of your screen to save this file.");
     }
+  };
+
+  // Handle Card Clicks (Block Pending from opening)
+  const handleTransactionClick = (txn) => {
+    if (String(txn.status) === "0") {
+      // Pending state -> Do nothing when clicked
+      return; 
+    }
+    setSelectedTxn(txn);
+    setShowVoucher(true);
   };
 
   const getStatusDetails = (statusCode) => {
@@ -179,23 +232,26 @@ export default function ProfileSection({
         return { 
           label: "Approved", 
           badgeStyle: { backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.2)' },
-          canvasColor: "#10b981", 
-          text: "TRANSFER SUCCESSFUL" 
+          heading: "TRANSACTION SUCCESSFUL",
+          note: "Thank you for exchanging with us! Your funds have been successfully transferred to the target wallet.",
+          colorClass: "text-emerald-500"
         };
       case "2":
         return { 
           label: "Rejected", 
           badgeStyle: { backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)' },
-          canvasColor: "#ef4444", 
-          text: "TRANSACTION REJECTED" 
+          heading: "TRANSACTION REJECTED",
+          note: "We are sorry, but this transaction was cancelled or declined. Please check your transaction details and try again.",
+          colorClass: "text-rose-500"
         };
       case "0":
       default:
         return { 
           label: "Pending", 
           badgeStyle: { backgroundColor: 'rgba(245, 152, 11, 0.1)', color: '#f5980b', border: '1px solid rgba(245, 152, 11, 0.2)' },
-          canvasColor: "#f5980b", 
-          text: "TRANSACTION PENDING" 
+          heading: "TRANSACTION PENDING",
+          note: "Processing... Please wait a few moments.",
+          colorClass: "text-amber-500"
         };
     }
   };
@@ -245,7 +301,7 @@ export default function ProfileSection({
   return (
     <div className="max-w-6xl mx-auto w-full px-4 py-4 flex flex-col md:grid md:grid-cols-4 gap-6 items-start">
       
-      {/*  MOBILE NAVIGATION & QUICK PROFILE BAR */}
+      {/* MOBILE NAVIGATION */}
       <div className={`w-full md:hidden rounded-2xl border p-3 flex flex-col space-y-3 shadow-md ${themeClasses.sidebarBg}`}>
         <div className="flex items-center justify-between pb-2 border-b border-dashed border-slate-700/20">
           <div className="flex items-center gap-3">
@@ -304,60 +360,42 @@ export default function ProfileSection({
           </div>
         )}
 
-        {/* PROFILE MAIN OR EDIT COMPONENT */}
-        {activeTab === 'profile' && (
-          <>
-            {!isEditing ? (
-              <div className={`border rounded-3xl p-5 md:p-6 shadow-xl space-y-5 ${themeClasses.cardBg}`}>
-                <div className={`flex justify-between items-center pb-3 border-b ${themeClasses.borderSeparator}`}><h4 className={`text-xs font-bold uppercase tracking-wider ${themeClasses.textSub}`}>Recent Transactions (Today)</h4><button onClick={() => setActiveTab('history')} className={`text-[10px] font-bold uppercase border px-3 py-1.5 rounded-lg ${themeClasses.btnSecondary}`}>Older Records</button></div>
-                <div className="space-y-3">
-                  {recentTransactions.length === 0 ? (<div className={`text-center py-6 text-xs ${themeClasses.textSub}`}>No exchanges processed today.</div>) : (
-                    recentTransactions.map((txn) => {
-                      const statusMeta = getStatusDetails(txn.status);
-                      return (
-                        <div key={txn.txn_id} onClick={() => { setSelectedTxn(txn); setShowVoucher(true); }} className={`border p-4 rounded-xl flex justify-between items-center shadow-sm cursor-pointer ${themeClasses.innerCard}`}>
-                          <div><span className={`text-[10px] font-mono ${themeClasses.textMuted}`}>ID: {txn.txn_id} • {txn.created_at}</span><div className="flex items-center space-x-1.5 mt-1"><span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-700 border'}`}>{txn.from_wallet}</span><ArrowRight size={10} className={themeClasses.textMuted} /><span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${isDarkMode ? 'bg-slate-950 text-yellow-400' : 'bg-amber-50 text-amber-600'}`}>{txn.to_wallet}</span></div></div>
-                          <div className="text-right"><span className={`text-sm font-black block ${themeClasses.textMain}`}>{Number(txn.send_amount).toLocaleString()} MMK</span><span className="inline-block text-[9px] font-bold px-2 py-0.5 rounded mt-1" style={statusMeta.badgeStyle}>{statusMeta.label}</span></div>
+        {/* PROFILE MAIN */}
+        {activeTab === 'profile' && !isEditing && (
+          <div className={`border rounded-3xl p-5 md:p-6 shadow-xl space-y-5 ${themeClasses.cardBg}`}>
+            <div className={`flex justify-between items-center pb-3 border-b ${themeClasses.borderSeparator}`}><h4 className={`text-xs font-bold uppercase tracking-wider ${themeClasses.textSub}`}>Recent Transactions (Today)</h4><button onClick={() => setActiveTab('history')} className={`text-[10px] font-bold uppercase border px-3 py-1.5 rounded-lg ${themeClasses.btnSecondary}`}>Older Records</button></div>
+            <div className="space-y-3">
+              {recentTransactions.length === 0 ? (<div className={`text-center py-6 text-xs ${themeClasses.textSub}`}>No exchanges processed today.</div>) : (
+                recentTransactions.map((txn) => {
+                  const statusMeta = getStatusDetails(txn.status);
+                  const isPending = String(txn.status) === "0";
+                  return (
+                    <div 
+                      key={txn.id} 
+                      onClick={() => handleTransactionClick(txn)} 
+                      className={`border p-4 rounded-xl flex justify-between items-center shadow-sm ${isPending ? 'cursor-default opacity-75' : 'cursor-pointer'} ${themeClasses.innerCard}`}
+                    >
+                      <div>
+                        <span className={`text-[10px] font-mono ${themeClasses.textMuted}`}>No: {txn.id} • {txn.created_at}</span>
+                        <div className="flex items-center space-x-1.5 mt-1">
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-700 border'}`}>{txn.from_wallet}</span>
+                          <ArrowRight size={10} className={themeClasses.textMuted} />
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${isDarkMode ? 'bg-slate-950 text-yellow-400' : 'bg-amber-50 text-amber-600'}`}>{txn.to_wallet}</span>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            ) : (
-              /* EDIT PROFILE FORM COMPONENT */
-              <form onSubmit={handleSaveChanges} className={`border rounded-3xl p-5 md:p-6 shadow-xl space-y-5 ${themeClasses.cardBg}`}>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-500">Edit Profile Details</h4>
-                <div className={`border p-4 rounded-2xl flex items-center gap-4 ${themeClasses.innerCard}`}>
-                  <input type="file" ref={fileInputRef} onChange={handleAvatarChange} accept="image/*" className="hidden" />
-                  <div className="relative cursor-pointer shrink-0" onClick={() => fileInputRef.current.click()}>
-                    <img 
-                      src={formatImgSrc(tempAvatar)} 
-                      className="w-16 h-16 rounded-full object-cover border-2 border-amber-500 p-0.5" 
-                      alt="Preview" 
-                      onError={(e) => { e.currentTarget.src = "/uploads/default-avatar.png"; }}
-                    />
-                    <div className="absolute inset-0 bg-slate-950/40 rounded-full flex items-center justify-center"><Camera size={14} className="text-white" /></div>
-                  </div>
-                  <div><span className={`text-xs font-bold block ${themeClasses.textMain}`}>Change Profile Photo</span><span className={`text-[10px] ${themeClasses.textSub}`}>Click photo to upload new image.</span></div>
-                </div>
-                <div className="space-y-3.5">
-                  <div><label className={`block text-[10px] font-bold uppercase mb-1.5 ${themeClasses.textSub}`}>Full Name</label><div className={`flex items-center border rounded-xl px-3 py-2.5 ${themeClasses.inputBg}`}><User size={14} className="mr-2 opacity-50" /><input type="text" required value={editName} onChange={(e)=>setEditName(e.target.value)} className="bg-transparent text-xs w-full focus:outline-none" /></div></div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className={`block text-[10px] font-bold uppercase mb-1.5 ${themeClasses.textSub}`}>Email Address</label><div className={`flex items-center border rounded-xl px-3 py-2.5 ${themeClasses.inputBg}`}><Mail size={14} className="mr-2 opacity-50" /><input type="email" required value={editEmail} onChange={(e)=>setEditEmail(e.target.value)} className="bg-transparent text-xs w-full focus:outline-none" /></div></div>
-                    <div><label className={`block text-[10px] font-bold uppercase mb-1.5 ${themeClasses.textSub}`}>Phone Number</label><div className={`flex items-center border rounded-xl px-3 py-2.5 ${themeClasses.inputBg}`}><Phone size={14} className="mr-2 opacity-50" /><input type="tel" required value={editPhone} onChange={(e)=>setEditPhone(e.target.value)} className="bg-transparent text-xs w-full focus:outline-none font-mono" /></div></div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 pt-2">
-                  <button type="button" onClick={() => setIsEditing(false)} className={`flex-1 border py-2.5 rounded-xl text-xs font-bold ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-200 text-slate-700'}`}>Cancel</button>
-                  <button type="submit" className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 uppercase shadow-lg"><CheckCircle size={14} /> Save Changes</button>
-                </div>
-              </form>
-            )}
-          </>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-black block ${themeClasses.textMain}`}>{Number(txn.send_amount).toLocaleString()} MMK</span>
+                        <span className="inline-block text-[9px] font-bold px-2 py-0.5 rounded mt-1" style={statusMeta.badgeStyle}>{statusMeta.label}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         )}
 
-        {/*  HISTORICAL TRANSACTION HISTORY */}
+        {/* HISTORICAL TRANSACTION HISTORY */}
         {activeTab === 'history' && (
           <div className={`border rounded-3xl p-5 shadow-xl space-y-4 ${themeClasses.cardBg}`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-dashed border-slate-700/20">
@@ -373,10 +411,25 @@ export default function ProfileSection({
               {filteredHistoryTransactions.length === 0 ? (<div className="text-center py-12 text-xs">No older transactions match the filter.</div>) : (
                 filteredHistoryTransactions.map((txn) => {
                   const statusMeta = getStatusDetails(txn.status);
+                  const isPending = String(txn.status) === "0";
                   return (
-                    <div key={txn.txn_id} onClick={() => { setSelectedTxn(txn); setShowVoucher(true); }} className={`border p-4 rounded-xl flex justify-between items-center cursor-pointer transition-all duration-200 ${themeClasses.innerCard}`}>
-                      <div><span className={`text-[10px] font-mono ${themeClasses.textMuted}`}>ID: {txn.txn_id} • {txn.created_at}</span><div className="flex items-center space-x-2 mt-1"><span className="text-xs font-bold">{txn.from_wallet}</span><ArrowRight size={12} /><span className="text-xs font-bold text-amber-500">{txn.to_wallet}</span></div></div>
-                      <div className="text-right"><span className={`text-sm font-black ${themeClasses.textMain}`}>{Number(txn.send_amount).toLocaleString()} MMK</span><span className="block text-[9px] font-bold px-2 py-0.5 rounded mt-1" style={statusMeta.badgeStyle}>{statusMeta.label}</span></div>
+                    <div 
+                      key={txn.id} 
+                      onClick={() => handleTransactionClick(txn)} 
+                      className={`border p-4 rounded-xl flex justify-between items-center shadow-sm ${isPending ? 'cursor-default opacity-75' : 'cursor-pointer'}  ${themeClasses.innerCard}`}
+                    >
+                      <div>
+                        <span className={`text-[10px] font-mono ${themeClasses.textMuted}`}>No: {txn.id} • {txn.created_at}</span>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <span className="text-xs font-bold">{txn.from_wallet}</span>
+                          <ArrowRight size={12} />
+                          <span className="text-xs font-bold text-amber-500">{txn.to_wallet}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-black ${themeClasses.textMain}`}>{Number(txn.send_amount).toLocaleString()} MMK</span>
+                        <span className="block text-[9px] font-bold px-2 py-0.5 rounded mt-1" style={statusMeta.badgeStyle}>{statusMeta.label}</span>
+                      </div>
                     </div>
                   );
                 })
@@ -385,9 +438,10 @@ export default function ProfileSection({
           </div>
         )}
 
-        {/*  CUSTOM SUPPORT HELPDESK VIEW */}
+        {/* SUPPORT HELPDESK */}
         {activeTab === 'support' && (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            {/* Form and active tickets go here identical to original setup */}
             <div className={`lg:col-span-3 border rounded-3xl p-5 shadow-xl space-y-4 h-fit ${themeClasses.cardBg}`}>
               <div>
                 <h4 className={`text-xs font-bold uppercase tracking-wider ${themeClasses.textMain}`}>Support Helpdesk</h4>
@@ -426,20 +480,18 @@ export default function ProfileSection({
               </form>
             </div>
             
-            {/* ACTIVE TICKETS CONTAINER */}
             <div className={`lg:col-span-2 border rounded-3xl p-5 shadow-xl space-y-3 flex flex-col ${themeClasses.cardBg}`}>
               <h4 className={`text-xs font-bold uppercase tracking-wider ${themeClasses.textMain}`}>Active Tickets</h4>
-              <div className="space-y-3 overflow-y-auto max-h-[300px] lg:max-h-[400px]">
+              <div className="space-y-3 overflow-y-auto max-h-[300px]">
                 {supportTickets.map((ticket) => (
                   <div key={ticket.id} className={`p-3.5 border rounded-xl space-y-2 text-[11px] font-medium shadow-sm ${themeClasses.innerCard}`}>
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-amber-500 font-mono text-xs">{ticket.id}</span>
                       <span className="px-2 py-0.5 rounded text-[9px] font-bold" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#f5980b' }}>{ticket.status}</span>
                     </div>
-                    <div className="font-bold text-[10px]">{ticket.route} <span className="font-mono font-normal block text-[9px] opacity-60">Txn: {ticket.txn}</span></div>
+                    <div className="font-bold text-[10px]">{ticket.route}</div>
                     <p className={themeClasses.textSub}>{ticket.userMsg}</p>
                     <div className={`p-2 rounded-lg text-[10px] ${isDarkMode ? 'bg-slate-900 border border-slate-800 text-cyan-400' : 'bg-slate-100 text-slate-700'}`}>
-                      <span className="font-bold block text-[9px] uppercase tracking-wider mb-0.5 opacity-75">Admin Reply:</span>
                       {ticket.sysReply}
                     </div>
                   </div>
@@ -450,29 +502,104 @@ export default function ProfileSection({
         )}
       </div>
 
-      {/*  DOWNLOADABLE VOUCHER MODAL */}
+      {/* 🌟 DYNAMIC VOUCHER MODAL (Approved & Cancelled/Rejected Only) */}
       {showVoucher && selectedTxn && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-sm rounded-3xl shadow-2xl relative overflow-hidden flex flex-col bg-slate-900 border border-slate-800">
-            <div className="flex justify-between items-center px-5 py-3.5 bg-slate-950 border-b border-slate-800">
-              <button onClick={downloadVoucherHandle} className="flex items-center gap-1.5 text-xs font-bold text-amber-400 hover:text-amber-300 transition"><Download size={15} /> Save Receipt</button>
-              <button onClick={() => setShowVoucher(false)} className="p-1 rounded-full bg-slate-800 text-slate-400 hover:text-white transition"><X size={16} /></button>
+          <div className={`w-full max-w-md rounded-3xl shadow-2xl relative overflow-hidden flex flex-col border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+            
+            {/* Header / Download Button (Kept outside voucherRef so it won't render inside the image screenshot) */}
+            <div className={`flex justify-between items-center px-5 py-3.5 border-b ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
+              <button onClick={downloadVoucherHandle} className="flex items-center gap-1.5 text-xs font-bold text-amber-500 hover:text-amber-400 transition">
+                <Download size={15} /> Save Receipt
+              </button>
+              <button onClick={() => setShowVoucher(false)} className={`p-1 rounded-full transition ${isDarkMode ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-200 text-slate-600 hover:text-slate-900'}`}>
+                <X size={16} />
+              </button>
             </div>
-            <div ref={voucherRef} style={{ backgroundColor: '#0f172a', color: '#ffffff' }} className="p-6 space-y-5 relative">
-              <div className="text-center space-y-1">
-                <div className="mx-auto w-11 h-11 bg-amber-500 text-slate-950 rounded-full flex items-center justify-center shadow-lg mb-2"><FileText size={20} /></div>
-                <h3 style={{ color: '#fbbf24' }} className="text-xs font-black uppercase tracking-widest">Transaction Voucher</h3>
-                <p style={{ color: '#94a3b8' }} className="text-[10px]">Secure Wallet Exchange Network</p>
+
+            {/* Receipt Content Capture Target Area */}
+            <div 
+              ref={voucherRef} 
+              className={`p-6 space-y-6 w-full block ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}`}
+            >
+              {/* Status Header Block */}
+              <div className="text-center space-y-2">
+                {/* 🌟 FIXED: Replaced Lucide SVGs with clean CSS checkmarks to stop html2canvas from crashing */}
+                <div className="flex justify-center">
+                  {String(selectedTxn.status) === "1" ? (
+                    <div className="w-12 h-12 bg-emerald-500/10 rounded-full border border-emerald-500/30 flex items-center justify-center text-emerald-500 font-bold text-lg">
+                      ✓
+                    </div>
+                  ) : (
+                    <div className="w-12 h-12 bg-rose-500/10 rounded-full border border-rose-500/30 flex items-center justify-center text-rose-500 font-bold text-lg">
+                      ✕
+                    </div>
+                  )}
+                </div>
+                <h3 className={`text-sm font-black tracking-wider ${getStatusDetails(selectedTxn.status).colorClass}`}>
+                  {getStatusDetails(selectedTxn.status).heading}
+                </h3>
+                <p className="text-[11px] max-w-xs mx-auto opacity-75">
+                  {getStatusDetails(selectedTxn.status).note}
+                </p>
               </div>
-              <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)', color: getStatusDetails(selectedTxn.status).canvasColor, border: `1px solid ${getStatusDetails(selectedTxn.status).canvasColor}` }} className="p-2.5 rounded-xl text-center text-[10px] font-black tracking-wide">{getStatusDetails(selectedTxn.status).text}</div>
-              <div className="text-center py-2 border-y border-dashed border-slate-700"><span style={{ color: '#ffffff' }} className="text-2xl font-mono font-black">{Number(selectedTxn.send_amount).toLocaleString()} <span className="text-xs font-bold text-slate-400">MMK</span></span></div>
-              <div className="space-y-2.5 text-[11px]">
-                <div className="flex justify-between"><span style={{ color: '#94a3b8' }}>Transaction ID:</span><span style={{ color: '#f8fafc' }} className="font-mono font-bold">{selectedTxn.txn_id}</span></div>
-                <div className="flex justify-between"><span style={{ color: '#94a3b8' }}>Timestamp:</span><span style={{ color: '#cbd5e1' }} className="font-mono">{selectedTxn.created_at}</span></div>
-                <div className="flex justify-between border-t border-slate-800 pt-2"><span style={{ color: '#94a3b8' }}>Source:</span><span style={{ color: '#fbbf24' }} className="font-bold uppercase">{selectedTxn.from_wallet}</span></div>
-                <div className="flex justify-between"><span style={{ color: '#94a3b8' }}>Destination:</span><span style={{ color: '#fbbf24' }} className="font-bold uppercase">{selectedTxn.to_wallet}</span></div>
+
+              {/* Transaction Meta Details */}
+              <div className={`rounded-2xl p-4 space-y-3 text-xs border ${isDarkMode ? 'bg-slate-950 border-slate-800/60' : 'bg-slate-50 border-slate-100'}`}>
+                <div className="flex justify-between items-center pb-2 border-b border-dashed border-slate-700/20">
+                  <span className="opacity-60">Transaction No</span>
+                  <span className="font-mono font-bold">#{selectedTxn.id}</span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="opacity-60">Exchange Route</span>
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <span>{selectedTxn.from_wallet}</span>
+                    <span className="opacity-40">➔</span>
+                    <span>{selectedTxn.to_wallet}</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="opacity-60">Sender Details</span>
+                  <div className="text-right">
+                    <span className="font-bold block">{selectedTxn.sender_name || 'N/A'}</span>
+                    <span className="font-mono text-[10px] opacity-60">{selectedTxn.sender_phone || 'N/A'}</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="opacity-60">Receiver Details</span>
+                  <div className="text-right">
+                    <span className="font-bold block">{selectedTxn.receiver_name || 'N/A'}</span>
+                    <span className="font-mono text-[10px] opacity-60">{selectedTxn.receiver_phone || 'N/A'}</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-dashed border-slate-700/20">
+                  <span className="opacity-60">Date & Time</span>
+                  <span className="font-mono">{selectedTxn.created_at}</span>
+                </div>
+              </div>
+
+              {/* Exchange Amount Summary */}
+              <div className={`rounded-2xl p-4 flex justify-between items-center border ${isDarkMode ? 'bg-gradient-to-br from-slate-950 to-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <div>
+                  <span className="text-[10px] uppercase font-bold opacity-50 block">Amount Sent</span>
+                  <span className="text-sm font-black text-amber-500">{Number(selectedTxn.send_amount).toLocaleString()} MMK</span>
+                </div>
+                <span className="opacity-30 text-xs">➔</span>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold opacity-50 block">Amount Received</span>
+                  <span className="text-sm font-black text-emerald-500">{Number(selectedTxn.receive_amount).toLocaleString()} MMK</span>
+                </div>
+              </div>
+              
+              {/* Simple Brand Footer inside receipt screenshot */}
+              <div className="text-center text-[10px] opacity-40 font-mono">
+                Generated securely via E-Wallet Exchange Platform
               </div>
             </div>
+
           </div>
         </div>
       )}

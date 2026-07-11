@@ -9,6 +9,8 @@ const { spawn } = require('child_process');
 const { Server } = require('socket.io'); 
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
+const util = require('util');
+const execPromise = util.promisify(exec);
 
 const app = express();
 const server = http.createServer(app); 
@@ -86,7 +88,7 @@ const saveBase64Image = (base64String) => {
     return `http://localhost:5000/uploads/${filename}`;
 };
 
-// 💡 COBOL Authentication Validator  Helper Function
+// COBOL Authentication Validator  Helper Function
 const callCobolValidator = (action, name, phone, email, password) => {
     return new Promise((resolve, reject) => {
         const args = `${action},${name || ''},${phone || ''},${email || ''},${password || ''}`;
@@ -527,14 +529,114 @@ app.post('/api/profile/update', async (req, res) => {
     }
 });
 
-// ───  APPROVE TRANSACTION ROUTE (SOCKET BROADCAST) ───
+// ─── TICKET SUBMIT ROUTE ───
+/*app.post('/api/tickets/submit', async (req, res) => {
+    const { fromPay, toPay, txnNo, message } = req.body;
+
+    try {
+        const cobolRes = await callCobolValidator('SUPPORT', message, txnNo, '', '');
+        if (cobolRes.status === 'ERROR') {
+            return res.status(400).json({ success: false, message: cobolRes.message });
+        }
+
+        const newTicketId = "TKT-" + Math.floor(10000 + Math.random() * 90000);
+        const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
+        
+        const newTicket = {
+            id: newTicketId,
+            route: `${fromPay} ➔ ${toPay}`,
+            txn: txnNo || "N/A",
+            userMsg: message,
+            sysReply: `We receive your ticket for the ${fromPay} to ${toPay} transfer. Our team fixes it now.`,
+            status: "Open",
+            time: timestamp
+        };
+
+        res.status(200).json({ success: true, message: `Ticket ${newTicketId} created!`, ticket: newTicket });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message || error });
+    }
+});*/
+//modified code
+// Route to fetch all tickets for the Admin to see
+// 1. Route to fetch all tickets (for Admin panel)
+app.get('/api/tickets', (req, res) => {
+    const sql = 'SELECT * FROM support_tickets ORDER BY id DESC';
+    db.execute(sql, (err, rows) => {
+        if (err) {
+            console.error("Fetch Error:", err);
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(rows);
+    });
+});
+
+// Route to update a ticket with Admin Reply
+app.patch('/api/tickets/reply/:id', (req, res) => {
+    const { adminReply } = req.body;
+    const ticketId = req.params.id;
+
+    // Matches the 'admin_reply' column in your database screenshot
+    const sql = `UPDATE support_tickets 
+                 SET admin_reply = ?, status = 'Resolved' 
+                 WHERE id = ?`;
+
+    db.execute(sql, [adminReply, ticketId], (err, result) => {
+        if (err) {
+            console.error("Update Error:", err);
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ success: true, message: "Reply saved." });
+    });
+});
+// Submit Ticket Route (Using Callbacks)
+app.post('/api/tickets/submit', (req, res) => {
+    const { userId, fromPay, toPay, txnNo, message } = req.body;
+    
+    const sql = `INSERT INTO support_tickets (user_id, route, txn_no, user_message, status) 
+                 VALUES (?, ?, ?, ?, 'Pending')`;
+    
+    db.execute(sql, [userId, `${fromPay} ➔ ${toPay}`, txnNo, message], (err, result) => {
+        if (err) {
+            console.error("Insert Error:", err);
+            return res.status(500).json({ success: false, message: err.message });
+        }
+        res.json({ success: true, message: "Ticket submitted successfully." });
+    });
+});
+
+// Fetch Tickets Route (Using Callbacks)
+/*
+app.get('/api/tickets', (req, res) => {
+    db.execute('SELECT * FROM support_tickets ORDER BY id DESC', (err, rows) => {
+        if (err) {
+            console.error("Fetch Error:", err);
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(rows);
+    });
+});*/
+// Fetch Tickets Route
+//modified code
+app.get('/api/tickets', (req, res) => {
+    // Replace with your query to filter by user if needed
+    const sql = 'SELECT * FROM support_tickets ORDER BY id DESC';
+    
+    db.execute(sql, (err, rows) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: "Failed to fetch" });
+        }
+        res.json(rows);
+    });
+});
+
+// ─── ADMIN TRANSACTION APPROVAL ROUTE ───
 app.post('/api/admin/approve-transaction', async (req, res) => {
     console.log("=== Admin Approving Transaction ===", req.body);
-    
     let connection;
     try {
         const { transactionId, toWallet } = req.body;
-
         if (!transactionId || !toWallet) {
             return res.status(400).json({ success: false, message: 'Missing parameters.' });
         }
@@ -542,8 +644,9 @@ app.post('/api/admin/approve-transaction', async (req, res) => {
         connection = await db.promise().getConnection();
         await connection.beginTransaction();
 
+        //  FIX: Changed "id = ?" to "txn_id = ?"
         const [txns] = await connection.query(
-            'SELECT from_wallet, to_wallet, send_amount, receive_amount, status FROM exchange_transactions WHERE id = ? OR txn_id_tail = ?',
+            'SELECT from_wallet, to_wallet, send_amount, receive_amount, status FROM exchange_transactions WHERE txn_id = ? OR txn_id_tail = ?',
             [transactionId, transactionId]
         );
 
@@ -555,7 +658,7 @@ app.post('/api/admin/approve-transaction', async (req, res) => {
         const txn = txns[0];
         if (txn.status != '0') {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: 'Transaction is already processed or verified.' });
+            return res.status(400).json({ success: false, message: 'Transaction already processed.' });
         }
 
         const [wallets] = await connection.query(
@@ -573,54 +676,59 @@ app.post('/api/admin/approve-transaction', async (req, res) => {
         const receiveAmountInt = parseInt(txn.receive_amount, 10);
         const sourceDummyBalance = 0;
 
-        const cobolArgs = `APPROVE,${sendAmountInt},${receiveAmountInt},${sourceDummyBalance},${currentTgtBal}`;
+        const cobolArgs = `APPROVE,${sendAmountInt}.00,${receiveAmountInt}.00,${sourceDummyBalance}.00,${currentTgtBal}.00`;
+        const executablePath = path.join(__dirname, 'settlement.exe');
 
-        const runCobolSettlement = () => {
-            return new Promise((resolve) => {
-                exec(`settlement.exe "${cobolArgs}"`, (error, stdout, stderr) => {
-                    if (error) {
-                        resolve({ success: false, message: "COBOL Settlement Process Failed." });
-                    } else {
-                        const output = stdout.trim();
-                        if (output.startsWith("SUCCESS")) {
-                            const parts = output.split('|');
-                            resolve({ success: true, newTgtBal: parseInt(parts[2], 10) }); // Integer ပြန်ယူမယ်
-                        } else {
-                            resolve({ success: false, message: output.split('|')[1] || "Settlement Logic Error." });
-                        }
-                    }
-                });
-            });
-        };
-
-        const settlementResult = await runCobolSettlement();
-        if (!settlementResult.success) {
+        let stdout;
+        try {
+            const result = await execPromise(`"${executablePath}" "${cobolArgs}"`);
+            stdout = result.stdout;
+        } catch (execError) {
+            console.error("COBOL Exec Error:", execError);
             await connection.rollback();
-            return res.status(500).json({ success: false, message: settlementResult.message });
+            return res.status(500).json({ success: false, message: "COBOL Engine Process Failed." });
         }
 
-        const finalTargetBalance = Math.round(settlementResult.newTgtBal);
+        const output = stdout.trim();
+        if (!output.startsWith("SUCCESS")) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: output.split('|')[1] || "Settlement Logic Error." });
+        }
+
+        const parts = output.split('|');
+        const finalTargetBalance = Math.round(parseFloat(parts[2]));
 
         await connection.query('UPDATE wallets SET current_balance = ? WHERE wallet_id = ?', [finalTargetBalance, toWallet]);
+        
+        //  FIX: Changed "id = ?" to "txn_id = ?"
+        await connection.query('UPDATE exchange_transactions SET status = "1" WHERE txn_id = ? OR txn_id_tail = ?', [transactionId, transactionId]);
 
-        await connection.query(
-            'UPDATE exchange_transactions SET status = "1" WHERE id = ? OR txn_id_tail = ?',
-            [transactionId, transactionId]
-        );
+        const profit = sendAmountInt - receiveAmountInt;
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+
+        const sqlInsertSettlement = `
+            INSERT INTO daily_settlements (settlement_date, total_orders, total_cash_in, total_outflow, profit_generated)
+            VALUES (?, 1, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE 
+            total_orders = total_orders + 1,
+            total_cash_in = total_cash_in + VALUES(total_cash_in),
+            total_outflow = total_outflow + VALUES(total_outflow),
+            profit_generated = profit_generated + VALUES(profit_generated)
+        `;
+
+        await connection.query(sqlInsertSettlement, [today, sendAmountInt, receiveAmountInt, profit]);
 
         await connection.commit();
 
-        io.emit('transaction_updated', { 
-            transactionId: transactionId, 
-            status: '1' 
-        });
+        io.emit('transaction_updated', { transactionId, status: '1' });
+        return res.json({ success: true, message: 'Transaction approved! Funds successfully settled.' });
 
-        res.json({ success: true, message: 'Transaction approved! Funds successfully settled to client.' });
+
 
     } catch (error) {
         if (connection) await connection.rollback();
         console.error('Approve Error Log:', error);
-        res.status(500).json({ success: false, message: 'Internal Server Error.' });
+        return res.status(500).json({ success: false, message: 'Internal Server Error.' });
     } finally {
         if (connection) connection.release();
     }
@@ -629,11 +737,9 @@ app.post('/api/admin/approve-transaction', async (req, res) => {
 // ─── CANCEL / REJECT TRANSACTION ROUTE ───
 app.post('/api/admin/cancel-transaction', async (req, res) => {
     console.log("=== Admin Cancelling Transaction ===", req.body);
-
     let connection;
     try {
         const { transactionId } = req.body;
-
         if (!transactionId) {
             return res.status(400).json({ success: false, message: 'Missing transactionId.' });
         }
@@ -641,8 +747,9 @@ app.post('/api/admin/cancel-transaction', async (req, res) => {
         connection = await db.promise().getConnection();
         await connection.beginTransaction();
 
+        // 🌟 FIX: Changed "id = ?" to "txn_id = ?"
         const [txns] = await connection.query(
-            'SELECT from_wallet, send_amount, receive_amount, status FROM exchange_transactions WHERE id = ? OR txn_id_tail = ?',
+            'SELECT from_wallet, send_amount, receive_amount, status FROM exchange_transactions WHERE txn_id = ? OR txn_id_tail = ?',
             [transactionId, transactionId]
         );
 
@@ -667,60 +774,46 @@ app.post('/api/admin/cancel-transaction', async (req, res) => {
             return res.status(404).json({ success: false, message: 'Source wallet reference not found.' });
         }
 
-        // ─── 💡 INTEGER သို့ ပြောင်းလဲခြင်း ───
         const currentSrcBal = parseInt(wallets[0].current_balance, 10) || 0;
         const sendAmountInt = parseInt(txn.send_amount, 10);
         const receiveAmountInt = parseInt(txn.receive_amount, 10);
         const targetDummyBalance = 0;
 
-        const cobolArgs = `CANCEL,${sendAmountInt},${receiveAmountInt},${currentSrcBal},${targetDummyBalance}`;
+        const cobolArgs = `CANCEL,${sendAmountInt}.00,${receiveAmountInt}.00,${currentSrcBal}.00,${targetDummyBalance}.00`;
+        const executablePath = path.join(__dirname, 'settlement.exe');
 
-        const runCobolCancel = () => {
-            return new Promise((resolve) => {
-                exec(`settlement.exe "${cobolArgs}"`, (error, stdout, stderr) => {
-                    if (error) {
-                        resolve({ success: false, message: "COBOL Cancel Process Failed." });
-                    } else {
-                        const output = stdout.trim();
-                        if (output.startsWith("SUCCESS")) {
-                            const parts = output.split('|');
-                            resolve({ success: true, newSrcBal: parseInt(parts[1], 10) }); // Integer ပြန်ယူမယ်
-                        } else {
-                            resolve({ success: false, message: output.split('|')[1] || "Cancel Logic Error." });
-                        }
-                    }
-                });
-            });
-        };
-
-        const cancelResult = await runCobolCancel();
-        if (!cancelResult.success) {
+        let stdout;
+        try {
+            const result = await execPromise(`"${executablePath}" "${cobolArgs}"`);
+            stdout = result.stdout;
+        } catch (execError) {
+            console.error("COBOL Cancel Exec Error:", execError);
             await connection.rollback();
-            return res.status(500).json({ success: false, message: cancelResult.message });
+            return res.status(500).json({ success: false, message: "COBOL Cancel Process Failed." });
         }
 
-        const finalSourceBalance = Math.round(cancelResult.newSrcBal);
+        const output = stdout.trim();
+        if (!output.startsWith("SUCCESS")) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: output.split('|')[1] || "Cancel Logic Error." });
+        }
+
+        const parts = output.split('|');
+        const finalSourceBalance = Math.round(parseFloat(parts[1]));
 
         await connection.query('UPDATE wallets SET current_balance = ? WHERE wallet_id = ?', [finalSourceBalance, txn.from_wallet]);
-
-        await connection.query(
-            'UPDATE exchange_transactions SET status = "2" WHERE id = ? OR txn_id_tail = ?',
-            [transactionId, transactionId]
-        );
-
+        
+        // 🌟 FIX: Changed "id = ?" to "txn_id = ?"
+        await connection.query('UPDATE exchange_transactions SET status = "2" WHERE txn_id = ? OR txn_id_tail = ?', [transactionId, transactionId]);
         await connection.commit();
 
-        io.emit('transaction_updated', { 
-            transactionId: transactionId, 
-            status: '2' 
-        });
-
-        res.json({ success: true, message: 'Transaction cancelled. Ledger state correctly adjusted back.' });
+        io.emit('transaction_updated', { transactionId, status: '2' });
+        return res.json({ success: true, message: 'Transaction cancelled. Ledger state rolled back.' });
 
     } catch (error) {
         if (connection) await connection.rollback();
         console.error('Cancel Error Log:', error);
-        res.status(500).json({ success: false, message: 'Internal Server Error.' });
+        return res.status(500).json({ success: false, message: 'Internal Server Error.' });
     } finally {
         if (connection) connection.release();
     }
@@ -749,6 +842,19 @@ app.post('/api/admin/replenish-wallet', (req, res) => {
     });
 });
 
+// ─── GET PENDING TRANSACTIONS ───
+app.get('/api/admin/pending-transactions', async (req, res) => {
+    try {
+        const [rows] = await db.promise().query(
+            'SELECT txn_id, user_id, from_wallet, to_wallet, send_amount, receive_amount, txn_id_tail, sender_name, sender_phone, receiver_name, receiver_phone, status, created_at FROM exchange_transactions WHERE status = "0" ORDER BY created_at DESC'
+        );
+        res.json(rows);
+    } catch (error) {
+        console.error("Fetch Pending Error:", error);
+        res.status(500).json({ success: false, message: "Database Error" });
+    }
+});
+
 // COBOL Transaction Status 
 app.post('/api/transactions/status-check', (req, res) => {
     const { statusCode } = req.body; 
@@ -775,6 +881,7 @@ app.post('/api/transactions/status-check', (req, res) => {
 
 // ADMIN PANEL USER Fetch
 app.get('/api/admin/users', async (req, res) => {
+    // FIX: Swapped COUNT(t.id) to COUNT(t.user_id) because t.id does not exist in exchange_transactions
     const query = `
         SELECT 
             u.id, 
@@ -783,7 +890,7 @@ app.get('/api/admin/users', async (req, res) => {
             u.email, 
             u.status, 
             u.isBlacklisted,
-            COUNT(t.id) AS totalTxns
+            COUNT(t.user_id) AS totalTxns
         FROM users u
         LEFT JOIN exchange_transactions t ON u.id = t.user_id
         WHERE u.role = 'user' OR u.role IS NULL OR u.role = ''
@@ -814,6 +921,8 @@ app.get('/api/admin/users', async (req, res) => {
 });
 
 // USER STATUS 
+// Note: Keep this route as-is since your React app uses it inside 'handleToggleUserStatus' 
+// fetching 'http://localhost:5000/api/admin/users/${userId}/status'
 app.put('/api/admin/users/:id/status', (req, res) => {
     const userId = req.params.id;
     const { status } = req.body;
@@ -826,24 +935,11 @@ app.put('/api/admin/users/:id/status', (req, res) => {
         if (err) return res.status(500).json({ message: 'Failed to sync status properties.' });
         res.status(200).json({ message: `User status altered to ${status} successfully.` });
     });
-});
+}); 
 
-// USER Block / Active 
-app.put('/api/admin/users/:id/toggle-block', (req, res) => {
-    const userId = req.params.id;
-    
-    db.query('SELECT status FROM users WHERE id = ?', [userId], (err, results) => {
-        if (err || results.length === 0) return res.status(404).json({ message: 'User not found' });
-        
-        const currentStatus = results[0].status;
-        const newStatus = currentStatus === 'Active' ? 'Blocked' : 'Active';
-        
-        db.query('UPDATE users SET status = ? WHERE id = ?', [newStatus, userId], (err) => {
-            if (err) return res.status(500).json({ message: 'Failed to update status' });
-            res.status(200).json({ message: `User account has been ${newStatus.toLowerCase()}.` });
-        });
-    });
-});
+// USER Block / Active Toggle
+// CLEANUP NOTE: You can safely delete or keep the '/api/admin/users/:id/toggle-block' route.
+// Your frontend relies on the explicit JSON payload route above (`/:id/status`), rendering this one redundant.
 
 // USER Blacklist 
 app.put('/api/admin/users/:id/toggle-blacklist', (req, res) => {
@@ -862,10 +958,77 @@ app.put('/api/admin/users/:id/toggle-blacklist', (req, res) => {
 
         db.query('UPDATE users SET isBlacklisted = ? WHERE id = ?', [nextBlacklistState, userId], (updateErr) => {
             if (updateErr) return res.status(500).json({ message: 'Failed to update blacklist status' });
-            res.status(200).json({ message: `User blacklist status updated to ${nextBlacklistState}.` });
+            
+            // FIX: Your React component triggers an alert with data.message. 
+            // Changing this to a clean string instead of the raw binary integer makes for a better UI experience.
+            const feedbackString = nextBlacklistState === 1 ? "added to the blacklist" : "removed from the blacklist";
+            res.status(200).json({ message: `User has been successfully ${feedbackString}.` });
         });
     });
 });
+
+// USER Block / Active Toggle
+app.put('/api/admin/users/:id/toggle-block', (req, res) => {
+    const userId = req.params.id;
+    
+    // An inline conditional (IF) updates 'Active' to 'Blocked' and vice-versa in 1 step
+    const query = `
+        UPDATE users 
+        SET status = IF(status = 'Active', 'Blocked', 'Active') 
+        WHERE id = ?
+    `;
+
+    db.query(query, [userId], (err, result) => {
+        if (err) {
+            console.error("Block status sync failure:", err);
+            return res.status(500).json({ message: 'Failed to update user status.' });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'User record not located.' });
+        }
+        
+        res.status(200).json({ message: "User status flipped successfully." });
+    });
+});
+
+// USER Blacklist Toggle
+app.put('/api/admin/users/:id/toggle-blacklist', (req, res) => {
+    const userId = req.params.id;
+    const query = `
+        UPDATE users 
+        SET isBlacklisted = COALESCE(isBlacklisted, 0) ^ 1 
+        WHERE id = ?
+    `;
+
+    db.query(query, [userId], (err, result) => {
+        if (err) {
+            console.error("Blacklist toggle failure:", err);
+            return res.status(500).json({ message: 'Failed to update blacklist status.' });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'User record not located.' });
+        }
+
+        res.status(200).json({ message: "User flag criteria modified." });
+    });
+});
+
+// Route to check a single user's live status during wallet sync
+app.get('/api/users/:id', (req, res) => {
+    const userId = req.params.id;
+    const query = 'SELECT id, status, isBlacklisted FROM users WHERE id = ?';
+
+    db.query(query, [userId], (err, results) => {
+        if (err) {
+            return res.status(500).json({ message: "Database lookup error" });
+        }
+        if (results.length === 0) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        res.status(200).json(results[0]);
+    });
+});
+
 
 // Route to check a single user's live status during wallet sync
 app.get('/api/users/:id', (req, res) => {
@@ -959,38 +1122,44 @@ app.get('/api/user-node/:id', (req, res) => {
     });
 });
 
-// UPDATE USER PROFILE (Refactored to Standard Callback)
+// UPDATE USER PROFILE (Plain Text Password Storage Version)
 app.put('/api/user-node/update/:id', (req, res) => {
     const userId = req.params.id;
-    const { name, phone, email, profile_photo } = req.body;
+    const { name, phone, email, profile_photo, password } = req.body;
 
     if (!name || !phone || !email) {
         return res.status(400).json({ error: "Required fields are missing." });
     }
 
-    const sqlUpdate = `UPDATE users SET name = ?, phone = ?, email = ?, profile_photo = ? WHERE id = ?`;
-
-    db.query(sqlUpdate, [name, phone, email, profile_photo, userId], (err, result) => {
-        if (err) {
-            console.error("Profile Update Error:", err);
-            return res.status(500).json({ error: "Failed to write updates to Database Controller." });
-        }
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ error: "User record updates failed or not found." });
-        }
-
-        // Socket.io Broadcast: Trigger real-time visual change on administrative profiles grid
-        io.emit('profile_updated', { userId, name, phone, email, profile_photo });
-
-        res.json({ 
-            success: true, 
-            message: "Profile node and database storage updated successfully." 
+    if (password && password.trim() !== "") {
+        const sqlUpdateWithPassword = `UPDATE users SET name = ?, phone = ?, email = ?, profile_photo = ?, password = ? WHERE id = ?`;
+        
+        db.query(sqlUpdateWithPassword, [name, phone, email, profile_photo, password, userId], (err, result) => {
+            if (err) {
+                console.error("Profile Update Error:", err);
+                return res.status(500).json({ error: "Failed to write updates to Database Controller." });
+            }
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ error: "User record updates failed or not found." });
+            }
+            return res.json({ success: true, message: "Profile and password updated successfully (Plain Text)." });
         });
-    });
+    } else {
+        const sqlUpdateWithoutPassword = `UPDATE users SET name = ?, phone = ?, email = ?, profile_photo = ? WHERE id = ?`;
+        
+        db.query(sqlUpdateWithoutPassword, [name, phone, email, profile_photo, userId], (err, result) => {
+            if (err) {
+                console.error("Profile Update Error:", err);
+                return res.status(500).json({ error: "Failed to write updates to Database Controller." });
+            }
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ error: "User record updates failed or not found." });
+            }
+            return res.json({ success: true, message: "Profile updated successfully." });
+        });
+    }
 });
-
-// FETCH ALL ADMINS
+//  FETCH ALL ADMINS
 app.get('/api/admins', (req, res) => {
     const query = `
         SELECT id, name, email, phone, role, status, isBlacklisted 
@@ -1153,6 +1322,80 @@ app.get('/api/settings', (req, res) => {
         });
     });
 });
+
+app.get('/api/dashboard/diagnostics', async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        
+        // daily_settlements table ထဲမှ data ကိုယူခြင်း
+        const [rows] = await db.promise().query(
+            'SELECT * FROM daily_settlements WHERE settlement_date = ?', 
+            [today]
+        );
+
+        const data = rows[0] || { total_orders: 0, total_cash_in: 0, total_outflow: 0, profit_generated: 0 };
+
+        res.json({
+            success: true,
+            today: {
+                totalOrders: data.total_orders,
+                totalIn: data.total_cash_in,
+                totalOut: data.total_outflow,
+                netProfit: data.profit_generated
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.get('/api/dashboard/history', async (req, res) => {
+    const { start, end } = req.query;
+    try {
+        const [rows] = await db.promise().query(
+            'SELECT * FROM daily_settlements WHERE settlement_date BETWEEN ? AND ? ORDER BY settlement_date DESC',
+            [start, end]
+        );
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// app.post('/api/transactions/approve/:id', (req, res) => {
+//     const txnId = req.params.id;
+
+//     // 1. Approve Transaction
+//     db.query("UPDATE exchange_transactions SET status = '1' WHERE txn_id = ?", [txnId], (err) => {
+//         if (err) return res.status(500).json({ success: false });
+
+//         // 2. Fetch the transaction details to save to daily_settlements
+//         db.query("SELECT send_amount, receive_amount, DATE(created_at) as s_date FROM exchange_transactions WHERE txn_id = ?", [txnId], (err, results) => {
+//             if (err || results.length === 0) return res.status(500).json({ success: false });
+
+//             const { send_amount, receive_amount, s_date } = results[0];
+//             const profit = send_amount - receive_amount;
+
+//             // 3. Update the daily_settlements table
+//             const sqlUpdate = `
+//                 INSERT INTO daily_settlements (settlement_date, total_orders, total_cash_in, total_outflow, profit_generated)
+//                 VALUES (?, 1, ?, ?, ?)
+//                 ON DUPLICATE KEY UPDATE 
+//                 total_orders = total_orders + 1,
+//                 total_cash_in = total_cash_in + VALUES(total_cash_in),
+//                 total_outflow = total_outflow + VALUES(total_outflow),
+//                 profit_generated = profit_generated + VALUES(profit_generated)
+//             `;
+
+//             db.query(sqlUpdate, [s_date, send_amount, receive_amount, profit], (err) => {
+//                 if (err) return res.status(500).json({ success: false });
+                
+//                 io.emit('refreshDashboard'); // Refresh UI
+//                 res.json({ success: true });
+//             });
+//         });
+//     });
+// });
 
 // ─── SERVER STARTUP LISTENER ───
 const PORT = process.env.PORT || 5000;

@@ -29,33 +29,16 @@ import AuditLogsView from './AuditLogsView';
 import SupportTicketsView from './SupportTicketsView';
 import ProfileView from './ProfileView';
 
-export default function AdminDashboard({ onLogout }) {
-  const [adminData, setAdminData] = useState({
-    name: "Zayar Linn",
-    role: "Super Admin",
-    phone: "09 777 123 456",
-    email: "zayarlinn@pay2pay.com",
-    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop"
-  });
+export default function AdminDashboard({ onLogout, adminData, setAdminData }) {
+  
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeView, setActiveView] = useState('dashboard');
   
+  // Profile dropdown menu control
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef(null);
-
-  // HARDCODED TICKET STATE (No database storage required)
-  const [tickets, setTickets] = useState([
-    {
-      id: "TKT-1127",
-      status: "Pending", // This maps to "Pending Review" in the view logic
-      route: "KPay ➔ WaveMoney",
-      txn_no: "TXN-1",
-      user_message: "Why cancel????",
-      admin_reply: "Awaiting customer support response..."
-    }
-  ]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -67,10 +50,12 @@ export default function AdminDashboard({ onLogout }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
   
+  // Platform configuration states
   const [feeRate, setFeeRate] = useState(2); 
   const [isPlatformOnline, setIsPlatformOnline] = useState(true);
   const [maintenanceMessage, setMaintenanceMessage] = useState('Maintenance Active.');
 
+  // User management records
   const [users, setUsers] = useState([
     { id: 1, name: 'Aung Htet', phone: '09770001111', status: 'Active', totalTxns: 12, isBlacklisted: false },
     { id: 2, name: 'Mya Thandar', phone: '09770002222', status: 'Blocked', totalTxns: 5, isBlacklisted: false },
@@ -78,12 +63,25 @@ export default function AdminDashboard({ onLogout }) {
   ]);
   const [userSearch, setUserSearch] = useState('');
 
+  const [tickets, setTickets] = useState([]);
+  const loadTickets = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/tickets');
+      const data = await response.json();
+      setTickets(data);
+    } catch (error) {
+      console.error("Error loading tickets:", error);
+    }
+  };
+
+  // Transaction ledger logs
   const [transactions, setTransactions] = useState([
     { id: "TXN-9901", date: "2026-06-24 14:30", name: "Ko Min Thant", phone: "09777123456", from: "Wave Pay", to: "KBZPay", code: "542198", amount: 100000, status: "Pending" }
   ]);
 
-  const [auditLogs] = useState([
-    { id: 1, timestamp: "2026-06-25 10:14:22", admin: "Zayar Linn", action: "Authorized Sync Matrix", ip: "192.168.1.45" }
+  // System audit trail
+  const [auditLogs, setAuditLogs] = useState([
+        { id: 1, timestamp: "2026-06-25 10:14:22", admin: 'Authorized Admin', action: "Authorized Sync Matrix", ip: "192.168.1.45" }
   ]);
 
   const handleToggleUserStatus = (id) => {
@@ -104,15 +102,16 @@ export default function AdminDashboard({ onLogout }) {
     hoverMenu: 'hover:bg-slate-500/10 hover:text-amber-500'
   };
 
+  // Notification counts remain completely removed as per your first request
   const navigationItems = [
-    { id: 'dashboard', label: 'Dashboard & Reports', icon: <LayoutDashboard size={16} />, count: 0 },
-    { id: 'verification', label: 'Txn Verification', icon: <CheckSquare size={16} />, count: transactions.filter(t => t.status === 'Pending').length },
-    { id: 'support', label: 'Support Tickets', icon: <MessageSquare size={16} />, count: (Array.isArray(tickets) ? tickets : []).filter(t => t.status === 'Pending').length },
+    { id: 'dashboard', label: 'Dashboard & Reports', icon: <LayoutDashboard size={16} /> },
+    { id: 'verification', label: 'Txn Verification', icon: <CheckSquare size={16} /> },
+    { id: 'support', label: 'Support Tickets', icon: <MessageSquare size={16} /> },
     { id: 'users', label: 'User Management', icon: <Users size={16} /> },
-    { id: 'admins', label: 'Admin Management', icon: <ShieldAlert size={16} />, count: 0 },
-    { id: 'wallets', label: 'Wallet & Limits', icon: <Wallet size={16} />, count: 0 },
-    { id: 'maintenance', label: 'System Settings', icon: <Settings size={16} />, count: 0 },
-    { id: 'audit', label: 'Immutable Audit Logs', icon: <History size={16} />, count: 0 },
+    { id: 'admins', label: 'Admin Management', icon: <ShieldAlert size={16} /> },
+    { id: 'wallets', label: 'Wallet & Limits', icon: <Wallet size={16} /> },
+    { id: 'maintenance', label: 'System Settings', icon: <Settings size={16} /> },
+    { id: 'audit', label: 'Immutable Audit Logs', icon: <History size={16} /> },
   ];
 
   const renderActiveView = () => {
@@ -139,7 +138,15 @@ export default function AdminDashboard({ onLogout }) {
           />
         );
       case 'audit': return <AuditLogsView theme={theme} isDarkMode={isDarkMode} auditLogs={auditLogs} />;
-      case 'profile': return <ProfileView theme={theme} isDarkMode={isDarkMode} adminData={adminData} setAdminData={setAdminData} />;
+      case 'profile': 
+        return (
+          <ProfileView 
+            theme={theme} 
+            isDarkMode={isDarkMode} 
+            adminData={adminData} 
+            setAdminData={setAdminData} 
+          />
+        );
       default: return <DiagnosticsView theme={theme} isDarkMode={isDarkMode} />;
     }
   };
@@ -147,15 +154,16 @@ export default function AdminDashboard({ onLogout }) {
   return (
     <div className={`min-h-screen font-sans flex flex-col md:flex-row transition-colors duration-500 ${theme.bg}`}>
       
-      {/* DESKTOP SIDEBAR */}
+      {/* 1. DESKTOP SIDEBAR */}
       <aside className={`hidden md:flex flex-col justify-between shrink-0 transition-all duration-300 border-r relative ${theme.sidebar} ${isSidebarCollapsed ? 'w-20' : 'w-72'}`}>
         <div>
+          {/* Logo area */}
           <div className={`px-6 h-[73px] border-b flex items-center justify-between ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
             {!isSidebarCollapsed ? (
               <div className="flex items-center w-full">
                 <div className="flex items-center gap-3 cursor-pointer select-none" onClick={() => setActiveView('dashboard')}>
                   <span className="text-xl md:text-2xl font-black tracking-wider text-amber-500">
-                    PAY<span className={isDarkMode ? 'text-white' : 'text-zinc-900'}>2PAY</span>
+                    PAY<span className={isDarkMode ? 'text-white' : 'text-zinc-900'}>2</span>PAY
                   </span>
                 </div>
                 <div className="ml-auto">
@@ -166,7 +174,7 @@ export default function AdminDashboard({ onLogout }) {
                     }`}
                     title="Collapse Sidebar"
                   >
-                    <ChevronLeft size={16} />
+                    <Menu size={16} />
                   </button>
                 </div>
               </div>
@@ -180,6 +188,7 @@ export default function AdminDashboard({ onLogout }) {
             )}
           </div>
           
+          {/* Main navigation */}
           <nav className="p-3 space-y-1.5">
             {navigationItems.map(item => {
               const isSelected = activeView === item.id;
@@ -196,23 +205,33 @@ export default function AdminDashboard({ onLogout }) {
                     </span>
                     {!isSidebarCollapsed && <span className="truncate">{item.label}</span>}
                   </div>
-                  {item.count > 0 && (
-                    <span className={`bg-slate-950 text-amber-400 text-[10px] rounded-full font-black ${isSidebarCollapsed ? 'absolute -top-1 -right-1 px-1.5 py-0.5 scale-90' : 'px-2 py-0.5'}`}>
-                      {item.count}
-                    </span>
-                  )}
                 </button>
               );
             })}
           </nav>
         </div>
-      </aside>
+        
+        <div className={`p-4 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-500/10'}`}>
+          <button
+            onClick={onLogout}
+            className={`w-full rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer border ${
+              isDarkMode 
+                ? 'border-slate-800 bg-slate-900 text-rose-400 hover:bg-slate-800' 
+                : 'border-rose-300 bg-rose-50 text-rose-600 hover:bg-rose-100'
+            } ${isSidebarCollapsed ? 'p-3' : 'py-2.5 px-4'}`}
+            title="Logout"
+          >
+            <LogOut size={16} strokeWidth={2.5} />
+            {!isSidebarCollapsed && <span>Logout</span>}
+          </button>
+        </div>
+      </aside> 
 
-      {/* MOBILE TOPBAR */}
+      {/* 2. MOBILE TOPBAR */}
       <div className={`md:hidden flex items-center justify-between px-4 py-4 border-b ${theme.header}`}>
         <div className="flex items-center gap-2 select-none cursor-pointer" onClick={() => setActiveView('dashboard')}>
           <span className="text-lg font-black tracking-wider text-amber-500">
-            PAY<span className={isDarkMode ? 'text-white' : 'text-slate-900'}>2PAY</span>
+            PAY<span className={isDarkMode ? 'text-white' : 'text-slate-900'}>2</span>PAY
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -229,18 +248,26 @@ export default function AdminDashboard({ onLogout }) {
         </div>
       </div>
 
-      {/* MOBILE MENU DRAWER */}
+      {/* 3. MOBILE MENU DRAWER */}
       {isMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden flex">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)} />
           <div className={`relative w-4/5 max-w-sm flex flex-col justify-between h-full p-4 border-r transition-colors duration-300 ${theme.sidebar}`}>
             <div>
-              <div className="flex items-center justify-between pb-4 mb-4 border-b">
-                <span className="text-sm font-black tracking-wider text-amber-500">PAY2PAY CONTROL</span>
-                <button onClick={() => setIsMenuOpen(false)} className={`p-2 rounded-xl border cursor-pointer ${isDarkMode ? 'border-slate-700 bg-slate-800 text-amber-400' : 'border-slate-200 bg-white text-amber-600'}`}>
-                  <X size={20} />
-                </button>
-              </div>
+              <button 
+                onClick={() => { setActiveView('profile'); setIsMenuOpen(false); }}
+                className={`w-full flex items-center gap-3 pb-4 mb-4 border-b text-left cursor-pointer focus:outline-none ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}
+              >
+                <div className="h-8 w-8 rounded-full overflow-hidden border border-amber-500/30 flex items-center justify-center shrink-0">
+                  <img src={adminData.avatar || adminData.profile_photo || adminData.avatarUrl} alt="Admin" className="w-full h-full object-cover" />
+                </div>
+                <div className="hidden lg:block">
+                  <p className={`text-xs font-black tracking-tight leading-none ${theme.textTitle}`}>{adminData.name}</p>
+                  <p className="text-[10px] text-amber-500 font-bold leading-none mt-1">{adminData.role}</p>
+                </div>
+              </button>
+              
+              {/* Navigation links */}
               <nav className="space-y-1.5">
                 {navigationItems.map(item => (
                   <button
@@ -252,9 +279,6 @@ export default function AdminDashboard({ onLogout }) {
                       {item.icon}
                       {item.label}
                     </div>
-                    {item.count > 0 && (
-                      <span className="bg-slate-950 text-amber-400 text-[10px] px-2 py-0.5 rounded-full font-black">{item.count}</span>
-                    )}
                   </button>
                 ))}
                 <button
@@ -263,29 +287,39 @@ export default function AdminDashboard({ onLogout }) {
                 >
                   <div className="flex items-center gap-3">
                     <User size={16} />
-                    Profile
+                    Profile Settings
                   </div>
                 </button>
               </nav>
             </div>
-            <div className="pt-4 border-t border-slate-800">
+
+            {/* Bottom Actions Area */}
+            <div className={`pt-4 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
               <button onClick={() => setIsDarkMode(!isDarkMode)} className="w-full flex items-center justify-between mb-4 px-2 text-xs font-bold cursor-pointer">
                 <span>Toggle Theme</span>
                 {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
               </button>
+              
               <button 
                 onClick={onLogout} 
-                className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 rounded-xl text-xs font-extrabold transition-all hover:brightness-110 shadow-sm cursor-pointer"
+                className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border cursor-pointer ${
+                  isDarkMode 
+                    ? 'border-slate-800 bg-slate-900 text-rose-400 hover:bg-slate-800' 
+                    : 'border-rose-300 bg-rose-50 text-rose-600 hover:bg-rose-100'
+                }`}
               >
-                Exit Session
+                <LogOut size={14} strokeWidth={2.5} />
+                <span>Logout</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MAIN WORKSPACE */}
+      {/* 4. MAIN WORKSPACE */}
       <div className="flex-grow flex flex-col min-w-0">
+        
+        {/* DESKTOP HEADER */}
         <header className={`hidden md:flex items-center justify-between px-8 h-[73px] border-b transition-all duration-300 ${theme.header}`}>
           <div className="flex items-center h-full">
             {isSidebarCollapsed && (
@@ -318,48 +352,19 @@ export default function AdminDashboard({ onLogout }) {
                 }`}
                 title="View Profile Details"
               >
-                <div className="h-8 w-8 rounded-full overflow-hidden border border-amber-500/30 flex items-center justify-center shrink-0">
-                  <img src={adminData.avatarUrl} alt="Admin" className="w-full h-full object-cover" />
+                <div className="h-10 w-10 rounded-full overflow-hidden border border-amber-500/30 flex items-center justify-center shrink-0">
+                  <img src={adminData.avatar || adminData.profile_photo || adminData.avatarUrl} alt="Admin" className="w-full h-full object-cover" />
                 </div>
-                <div className="hidden lg:block">
-                  <p className={`text-xs font-black tracking-tight leading-none ${theme.textTitle}`}>{adminData.name}</p>
+                <div className="flex-grow min-w-0">
+                  <p className={`text-xs font-black tracking-tight leading-none truncate ${theme.textTitle}`}>{adminData.name}</p>
                   <p className="text-[10px] text-amber-500 font-bold leading-none mt-1">{adminData.role}</p>
                 </div>
               </button>
-
-              <div className="relative flex items-center">
-                <button
-                  onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className={`p-2 rounded-xl transition-all duration-200 cursor-pointer focus:outline-none text-slate-400 ${
-                    isDarkMode ? 'hover:bg-slate-400/5' : 'hover:bg-slate-500/10'
-                  } ${isProfileOpen ? (isDarkMode ? 'bg-slate-400/5' : 'bg-slate-500/10') : ''}`}
-                  title="Account Settings"
-                >
-                  <MoreHorizontal size={16} />
-                </button>
-
-                {isProfileOpen && (
-                  <div className={`absolute right-0 top-[44px] w-48 rounded-xl border p-1.5 z-50 transition-all ${theme.dropdown}`}>
-                    <div className={`px-3 py-2 text-[10px] font-bold tracking-wider uppercase border-b mb-1 ${isDarkMode ? 'text-slate-500 border-slate-800' : 'text-slate-400 border-slate-100'}`}>
-                      Account Options
-                    </div>
-                    <button
-                      onClick={() => {
-                        setIsProfileOpen(false);
-                        onLogout();
-                      }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all text-left cursor-pointer"
-                    >
-                      <LogOut size={14} className="shrink-0" />
-                      <span>Exit Session</span>
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </header>
 
+        {/* Dynamic viewport panel */}
         <main className="flex-grow p-4 md:p-8 overflow-y-auto max-w-[1400px] mx-auto w-full">
           {renderActiveView()}
         </main>

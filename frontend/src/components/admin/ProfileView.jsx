@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, Phone, Mail, Edit2, Check, X, ShieldAlert, KeyRound, Camera } from 'lucide-react';
 
 export default function ProfileView({ theme, isDarkMode, adminData, setAdminData }) {
@@ -14,6 +14,14 @@ export default function ProfileView({ theme, isDarkMode, adminData, setAdminData
     confirmPassword: ''
   });
 
+  {/*su*/}
+  const [passwordError, setPasswordError] = useState('');
+
+  useEffect(() => {
+    setEditForm({ ...adminData });
+  }, [adminData]);
+{/*su*/}
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setEditForm(prev => ({ ...prev, [name]: value }));
@@ -22,8 +30,20 @@ export default function ProfileView({ theme, isDarkMode, adminData, setAdminData
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const imageUrl = URL.createObjectURL(file);
-      setEditForm(prev => ({ ...prev, avatarUrl: imageUrl }));
+      const reader = new FileReader();
+    
+      reader.onloadend = () => {
+        const base64String = reader.result;
+        
+        setEditForm(prev => ({ 
+          ...prev, 
+          avatar: base64String,
+          profile_photo: base64String,
+          avatarUrl: base64String 
+        }));
+      };
+      
+      reader.readAsDataURL(file);
     }
   };
 
@@ -33,28 +53,63 @@ export default function ProfileView({ theme, isDarkMode, adminData, setAdminData
     }
   };
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
-    setAdminData({ ...editForm });
-    setIsEditing(false);
-    alert("Profile info updated successfully!");
+    try {
+      if (typeof setAdminData === 'function') {
+        // Build payload including the new password if it was filled in the modal
+        const finalPayload = {
+          ...editForm,
+          password: passwordForm.newPassword || undefined
+        };
+        await setAdminData(finalPayload); 
+      }
+      setIsEditing(false);
+    } catch (err) {
+      console.error("Failed to update profile:", err);
+    }
   };
 
-  const handlePasswordSubmit = (e) => {
+ const handlePasswordSubmit = async (e) => {
     e.preventDefault();
+    
     if (!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
       alert("Please fill all password fields.");
       return;
     }
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      alert("New password and confirm password do not match!");
+  
+    if (passwordForm.newPassword.length < 8) {
+      setPasswordError("Password must be at least 8 characters long!");
       return;
     }
-    alert("Password changed successfully!");
-    setIsPasswordModalOpen(false);
-    setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
-  };
 
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError("New password and confirm password do not match!");
+      return;
+    }
+
+    try {
+      if (typeof setAdminData === 'function') {
+        // Gather all existing state data plus the new password to send to App.js
+        const updatedPayload = {
+          ...editForm,
+          name: editForm.name || adminData.name,
+          phone: editForm.phone || adminData.phone,
+          email: editForm.email || adminData.email,
+          profile_photo: editForm.profile_photo || adminData.profile_photo,
+          password: passwordForm.newPassword
+        };
+
+        await setAdminData(updatedPayload); 
+        
+        setIsPasswordModalOpen(false);
+        setPasswordError('');
+        // Keep the newPassword state temporarily so handleSaveProfile can also access it if needed
+      }
+    } catch (err) {
+      alert("Failed to change password in database.");
+    }
+  };
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 sm:space-y-6 px-1 sm:px-0 pb-4 relative overflow-x-hidden">
       {/* <div>
@@ -66,39 +121,52 @@ export default function ProfileView({ theme, isDarkMode, adminData, setAdminData
         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
 
         {/* Responsive Header: Ensures the edit button and profile content fit well on small screens */}
-        <div className="flex flex-col items-center gap-4 pb-6 pt-2 sm:flex-row sm:items-center sm:gap-6 sm:pt-0 border-b border-slate-500/10">
-          <div className="relative group flex flex-col items-center">
-            <div 
-              onClick={handleAvatarClick}
-              className={`h-24 w-24 rounded-full overflow-hidden bg-slate-800 flex items-center justify-center border border-slate-500/20 shadow-lg shadow-amber-500/5 shrink-0 ${isEditing ? 'cursor-pointer ring-4 ring-amber-500/30' : ''}`}
-            >
-              <img src={isEditing ? editForm.avatarUrl : adminData.avatarUrl} alt="Admin Avatar" className="w-full h-full object-cover" />
-            </div>
-            {isEditing && (
-              <div onClick={handleAvatarClick} className="absolute inset-0 bg-black/50 rounded-full flex flex-col items-center justify-center text-[10px] text-white font-black opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer pointer-events-none">
-                <Camera size={16} className="mb-0.5 text-amber-400" /> Change
-              </div>
-            )}
-            {!isEditing && (
-              <button
-                type="button"
-                onClick={() => { setEditForm({ ...adminData }); setIsEditing(true); }}
-                className="mt-2 flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-slate-950 shadow-md shadow-amber-500/15 hover:brightness-110 transition-all cursor-pointer"
-                aria-label="Edit profile"
-              >
-                <Edit2 size={14} />
-              </button>
-            )}
-          </div>
-          
-          <div className="w-full text-center sm:text-left space-y-1.5 min-w-0">
-            <h3 className={`text-lg font-black break-words ${theme.textTitle}`}>{isEditing ? editForm.name : adminData.name}</h3>
-            <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
-              {adminData.role}
-            </span>
-          </div>
-        </div>
+<div className="flex flex-col items-center gap-4 pb-6 pt-2 sm:flex-row sm:items-center sm:gap-6 sm:pt-0 border-b border-slate-500/10">
+  
+  {/* Relative Container: Profile */}
+  <div className="relative group shrink-0">
+    <div 
+      onClick={handleAvatarClick}
+      className={`h-24 w-24 rounded-full overflow-hidden bg-slate-800 flex items-center justify-center border border-slate-500/20 shadow-lg shadow-amber-500/5 ${isEditing ? 'cursor-pointer ring-4 ring-amber-500/30' : ''}`}
+    >
+      {/*su*/}
+      <img 
+      src={isEditing ? (editForm.avatar || editForm.profile_photo || editForm.avatarUrl) : (adminData.avatar || adminData.profile_photo || adminData.avatarUrl)} 
+      alt="Admin Avatar" 
+      className="w-full h-full object-cover" 
+    />
+      {/*su*/}
+    </div>
 
+    {/* (Camera Overlap for Editing State) */}
+    {isEditing && (
+      <div onClick={handleAvatarClick} className="absolute inset-0 bg-black/50 rounded-full flex flex-col items-center justify-center text-[10px] text-white font-black opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer pointer-events-none">
+        <Camera size={16} className="mb-0.5 text-amber-400" /> Change
+      </div>
+    )}
+     {/*su*/}
+    {/* Facebook Active Status Edit Icon */}
+    {!isEditing && (
+      
+      <button
+        type="button"
+        
+        onClick={() => { setEditForm({ ...adminData, avatar: adminData.avatar || adminData.profile_photo || adminData.avatarUrl }); setIsEditing(true); }}
+        className="absolute bottom-0 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 hover:brightness-110 transition-all border-2 border-white dark:border-slate-900 cursor-pointer"
+        aria-label="Edit profile"
+      >
+        <Edit2 size={13} />
+      </button>
+    )}
+  </div>
+  
+  <div className="w-full text-center sm:text-left space-y-1.5 min-w-0">
+    <h3 className={`text-lg font-black break-words ${theme.textTitle}`}>{isEditing ? editForm.name : adminData.name}</h3>
+    <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+      {adminData.role}
+    </span>
+  </div>
+</div>
         {/* Form Inputs */}
         <div className="grid grid-cols-1 gap-4 pt-6">
           <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-500/5 min-w-0">
@@ -168,12 +236,19 @@ export default function ProfileView({ theme, isDarkMode, adminData, setAdminData
                 <input type="password" required value={passwordForm.oldPassword} onChange={(e) => setPasswordForm(prev => ({ ...prev, oldPassword: e.target.value }))} className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-amber-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} placeholder="••••••••" />
               </div>
               <div>
-                <label className={`block text-[10px] font-black uppercase tracking-wider mb-1.5 ${theme.textMuted}`}>New Password</label>
-                <input type="password" required value={passwordForm.newPassword} onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))} className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-amber-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} placeholder="Minimum 8 characters" />
-              </div>
+  <label className={`block text-[10px] font-black uppercase tracking-wider mb-1.5 ${theme.textMuted}`}>New Password</label>
+  <input type="password" required value={passwordForm.newPassword} onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))} className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-amber-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} placeholder="Minimum 8 characters" />
+  
+  {passwordError && (
+    <p className="text-rose-500 text-[11px] font-semibold mt-1">
+      {passwordError}
+    </p>
+  )}
+</div>
               <div>
                 <label className={`block text-[10px] font-black uppercase tracking-wider mb-1.5 ${theme.textMuted}`}>Confirm New Password</label>
                 <input type="password" required value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))} className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-amber-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} placeholder="Re-enter new password" />
+                
               </div>
               <div className="pt-2 flex justify-end gap-2">
                 <button type="button" onClick={() => setIsPasswordModalOpen(false)} className={`px-4 py-2 text-xs font-bold rounded-xl border cursor-pointer ${isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-400' : 'border-slate-200 hover:bg-slate-50 text-slate-500'}`}>Dismiss</button>
