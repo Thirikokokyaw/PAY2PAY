@@ -73,6 +73,13 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
 
   const handleCreateWalletSubmit = async (e) => {
     e.preventDefault();
+
+    // Check if QR stream is present
+    if (!createForm.qr_code_path) {
+      alert("Please Upload Your QR Stream!");
+      return;
+    }
+
     try {
       const response = await fetch(`${BACKEND_URL}/api/wallets/create`, {
         method: 'POST',
@@ -119,6 +126,34 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
     }
   };
 
+  const handleToggleActive = async (wallet) => {
+    const nextActiveState = wallet.is_active === 'Y' ? 'N' : 'Y';
+    setWallets(prev => prev.map(w => 
+      w.wallet_id === wallet.wallet_id ? { ...w, is_active: nextActiveState } : w
+    ));
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/wallets/update-details`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...wallet,
+          is_active: nextActiveState,
+          isToggleAction: true
+        }),
+      });
+      
+      const resData = await response.json();
+      if (!resData.success) {
+        fetchWalletsFromDatabase(false);
+        alert("The status change failed and was reverted to the original status.");
+      }
+    } catch (err) {
+      console.error("Toggle API Error:", err);
+      fetchWalletsFromDatabase(false);
+    }
+  };
+
   // Helper function to render correct image path
   const getImageUrl = (path) => {
     if (!path) return null;
@@ -127,13 +162,12 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
   };
 
   return (
-    <div className="space-y-6 relative p-1 text-slate-700 dark:text-slate-300 w-full overflow-hidden">
+    <div className="space-y-6 relative p-1 text-slate-700 dark:text-slate-300 w-full">
       
       {/* Header & Clean Action Controls */}
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
         <div>
           <h2 className={`text-xl font-extrabold tracking-tight uppercase ${theme.textTitle}`}>Wallet & Limits Framework</h2>
-          {/* <p className={`text-xs mt-1 ${theme.textMuted}`}>COBOL automated engines strictly freeze pipelines with under 1,000 MMK buffer limits.</p> */}
         </div>
         <div className="flex gap-2 w-full sm:w-auto items-center font-sans">
           <button 
@@ -154,78 +188,92 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
         </div>
       </div>
 
-      {/*  Modified Layout: Horizontal Scroll Box */}
-      <div className="flex flex-row overflow-x-auto gap-6 pb-4 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 snap-x">
-        {wallets.map(wallet => {
-          const isActive = wallet.is_active === 'Y';
-          const balance = Number(wallet.current_balance) || 0;
-          const limit = Number(wallet.limit_warning) || 5000000;
-          const isLowBalance = balance < limit;
-          const qrImageUrl = getImageUrl(wallet.qr_code_path);
-          
-          return (
-            <div 
-              key={wallet.wallet_id} 
-              className={`border rounded-2xl p-5 shadow-sm flex flex-col justify-between transition-all relative group shrink-0 w-[320px] sm:w-[350px] snap-start ${theme.card} ${!isActive ? 'border-rose-500/30 bg-rose-50/5 opacity-75' : isLowBalance ? 'border-amber-500/40 bg-amber-50/5' : 'border-slate-200 dark:border-slate-800'}`}
-            >
-              
-              <button 
-                onClick={() => handleEditClick(wallet)}
-                className="absolute top-4 right-4 p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 opacity-0 group-hover:opacity-100 transition-all hover:bg-slate-700 dark:hover:bg-slate-600 hover:text-white shadow-sm"
-                title="Edit Configuration"
+      {/* Modified Layout: Vertical Scroll Box */}
+      <div className="max-h-[calc(100vh-220px)] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-4">
+          {wallets.map(wallet => {
+            const isActive = wallet.is_active === 'Y';
+            const balance = Number(wallet.current_balance) || 0;
+            const limit = Number(wallet.limit_warning) || 5000000;
+            const isLowBalance = balance < limit;
+            const qrImageUrl = getImageUrl(wallet.qr_code_path);
+            
+            return (
+              <div 
+                key={wallet.wallet_id} 
+                className={`border rounded-2xl p-5 shadow-sm flex flex-col justify-between transition-all relative group w-full ${theme.card} ${!isActive ? 'border-rose-500/30 bg-rose-50/5 opacity-75' : isLowBalance ? 'border-amber-500/40 bg-amber-50/5' : 'border-slate-200 dark:border-slate-800'}`}
               >
-                <Edit3 size={14} />
-              </button>
-
-              <div>
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider border ${isActive ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'}`}>
-                      {isActive ? 'Active Route' : 'Frozen Buffer'}
-                    </span>
-                    <h3 className={`text-base font-bold mt-2 text-slate-900 dark:text-white`}>{wallet.wallet_name}</h3>
-                  </div>
-                  <div className="pt-0.5">
-                    {isActive ? <ToggleRight size={32} className="text-amber-500" /> : <ToggleLeft size={32} className="text-slate-400 dark:text-slate-600" />}
-                  </div>
-                </div>
-
-                <div className="mb-4 flex justify-center bg-slate-50 dark:bg-slate-900/40 p-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-                  {qrImageUrl ? (
-                    <img src={qrImageUrl} alt="QR Storage Stream" className="w-24 h-24 object-contain rounded-lg" />
-                  ) : (
-                    <div className="w-24 h-24 flex flex-col items-center justify-center text-slate-300 dark:text-slate-600">
-                      <QrCode size={32} strokeWidth={1.5} />
-                      <span className="text-[10px] mt-2 text-slate-400">No QR Asset</span>
+                <div>
+                  <div className="flex justify-between items-start mb-4 gap-4">    
+                    <div className="flex flex-col gap-2 min-w-0 flex-1">
+                      <div>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider border ${isActive ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'}`}>
+                          {isActive ? 'Active Route' : 'Frozen Buffer'}
+                        </span>
+                      </div>
+                      
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white truncate pt-1">
+                        {wallet.wallet_name}
+                      </h3>
                     </div>
-                  )}
+
+                    <div className="flex flex-col items-center gap-2 shrink-0">
+                      <button 
+                        onClick={() => handleEditClick(wallet)}
+                        className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all hover:bg-slate-700 dark:hover:bg-slate-600 hover:text-white shadow-sm"
+                        title="Edit"
+                      >
+                        <Edit3 size={13} />
+                      </button>
+
+                      {/* Toggle Button On Click Function */}
+                      <div className="h-7 flex items-center">
+                        {isActive ? (
+                          <ToggleRight size={28} className="text-amber-500 cursor-pointer" onClick={() => handleToggleActive(wallet)} />
+                        ) : (
+                          <ToggleLeft size={28} className="text-slate-400 dark:text-slate-600 cursor-pointer" onClick={() => handleToggleActive(wallet)} />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mb-4 flex justify-center bg-slate-50 dark:bg-slate-900/40 p-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                    {qrImageUrl ? (
+                      <img src={qrImageUrl} alt="QR Storage Stream" className="w-24 h-24 object-contain rounded-lg" />
+                    ) : (
+                      <div className="w-24 h-24 flex flex-col items-center justify-center text-slate-300 dark:text-slate-600">
+                        <QrCode size={32} strokeWidth={1.5} />
+                        <span className="text-[10px] mt-2 text-slate-400">No QR Asset</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 font-mono text-xs text-slate-500 dark:text-slate-400 mb-5 bg-slate-50 dark:bg-slate-900/20 p-3 rounded-xl border border-slate-100 dark:border-slate-800/40">
+                    <p><span className="text-slate-400 font-sans text-[11px]">System ID:</span> <span className="font-bold text-slate-700 dark:text-slate-300">{wallet.wallet_id}</span></p>
+                    <p><span className="text-slate-400 font-sans text-[11px]">Account No:</span> <span className="font-bold text-slate-700 dark:text-slate-300">{wallet.account_number}</span></p>
+                    <p><span className="text-slate-400 font-sans text-[11px]">Holder:</span> <span className="text-slate-700 dark:text-slate-300 font-medium">{wallet.account_holder || 'N/A'}</span></p>
+                  </div>
                 </div>
 
-                <div className="space-y-1.5 font-mono text-xs text-slate-500 dark:text-slate-400 mb-5 bg-slate-50 dark:bg-slate-900/20 p-3 rounded-xl border border-slate-100 dark:border-slate-800/40">
-                  <p><span className="text-slate-400 font-sans text-[11px]">System ID:</span> <span className="font-bold text-slate-700 dark:text-slate-300">{wallet.wallet_id}</span></p>
-                  <p><span className="text-slate-400 font-sans text-[11px]">Account No:</span> <span className="font-bold text-slate-700 dark:text-slate-300">{wallet.account_number}</span></p>
-                  <p><span className="text-slate-400 font-sans text-[11px]">Holder:</span> <span className="text-slate-700 dark:text-slate-300 font-medium">{wallet.account_holder || 'N/A'}</span></p>
+                <div className="space-y-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex justify-between text-xs font-semibold">
+                    <span className="text-slate-400">Current Allocation:</span>
+                    <span className={isLowBalance ? 'text-rose-500 font-bold' : 'text-slate-900 dark:text-white'}>
+                      {balance.toLocaleString()} MMK
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-500 ${isLowBalance ? 'bg-rose-500' : 'bg-amber-500'}`} 
+                      style={{ width: `${Math.min((balance / (limit * 2 || 2000)) * 100, 100)}%` }}
+                    />
+                  </div>
                 </div>
+
               </div>
-
-              <div className="space-y-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <div className="flex justify-between text-xs font-semibold">
-                  <span className="text-slate-400">Current Allocation:</span>
-                  <span className={isLowBalance ? 'text-rose-500 font-bold' : 'text-slate-900 dark:text-white'}>
-                    {balance.toLocaleString()} MMK
-                  </span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-500 ${isLowBalance ? 'bg-rose-500' : 'bg-amber-500'}`} 
-                    style={{ width: `${Math.min((balance / (limit * 2 || 2000)) * 100, 100)}%` }}
-                  />
-                </div>
-              </div>
-
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
       {/* CREATE WALLET MODAL FORM */}
@@ -249,7 +297,9 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
                   {createForm.qr_code_path ? <img src={getImageUrl(createForm.qr_code_path)} alt="Preview" className="w-full h-full object-contain" /> : <QrCode size={24} className="text-slate-400" />}
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Upload QR Stream</label>
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Upload QR Stream <span className="text-rose-500 font-extrabold">* (Required)</span>
+                  </label>
                   <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold cursor-pointer transition-colors">
                     <Upload size={12} /> Choose Image
                     <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, true)} className="hidden" />
@@ -306,7 +356,7 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
             <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
               <div>
                 <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                  <Edit3 size={16} className="text-amber-500" /> Pipeline Properties Configuration
+                  <Edit3 size={16} className="text-amber-500" /> Edit Wallet
                 </h3>
               </div>
               <button onClick={() => setEditingWallet(null)} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-rose-500 transition-all">
@@ -371,7 +421,7 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
 
               <div className="flex gap-2.5 pt-4 border-t border-slate-200 dark:border-slate-800 justify-end">
                 <button type="button" onClick={() => setEditingWallet(null)} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200">Discard</button>
-                <button type="submit" className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-xl shadow-md"><Save size={12} className="inline mr-1" /> Save Configurations</button>
+                <button type="submit" className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-xl shadow-md"><Save size={12} className="inline mr-1" /> Save</button>
               </div>
             </form>
           </div>

@@ -6,6 +6,7 @@ import {
   CheckCircle, Download, X, FileText, HelpCircle, Send
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import { io } from 'socket.io-client';
 
 export default function ProfileSection({ 
   userInfo = { id: 1, name: "Kyaw Kyaw", phone: "09123456789", profile_photo: "/uploads/default-avatar.png", email: "user@gmail.com" }, 
@@ -22,6 +23,9 @@ export default function ProfileSection({
   const [isEditing, setIsEditing] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Local state to manage live transaction modifications
+  const [liveTransactions, setLiveTransactions] = useState(userTransactions);
 
   // Voucher Modal States
   const [selectedTxn, setSelectedTxn] = useState(null);
@@ -49,7 +53,7 @@ export default function ProfileSection({
     }
   ]);
 
-  // Helper function to format image source path securely
+  // Securely format image source paths
   const formatImgSrc = (src) => {
     if (!src) return "/uploads/default-avatar.png";
     if (src.startsWith('data:') || src.startsWith('http://') || src.startsWith('https://')) {
@@ -57,6 +61,46 @@ export default function ProfileSection({
     }
     return src.startsWith('/') ? src : `/${src}`;
   };
+
+  // Synchronize dynamic updates from parent node data injection
+  useEffect(() => {
+    setLiveTransactions(userTransactions);
+  }, [userTransactions]);
+
+  // Initialize Socket.io-client connection listener for transaction mutations
+  useEffect(() => {
+    if (!userInfo?.id) return;
+
+    // Establish WebSocket connection with backend core server
+    const socket = io('http://localhost:5000', {
+      transports: ['websocket'],
+      withCredentials: true
+    });
+
+    // Authenticate and lock socket connection session to current user channel room
+    socket.emit('join_user_room', { userId: userInfo.id });
+
+    // Catch instant backend notifications when an operational admin alters any status
+    socket.on('transaction_status_updated', (updatedTxn) => {
+      setLiveTransactions((prevTxns) => 
+        prevTxns.map((txn) => txn.txn_id === updatedTxn.txn_id ? { ...txn, status: updatedTxn.status } : txn)
+      );
+
+      // Refresh currently opened voucher viewport context if the user is reviewing it live
+      setSelectedTxn((currentTxn) => {
+        if (currentTxn && currentTxn.txn_id === updatedTxn.txn_id) {
+          return { ...currentTxn, status: updatedTxn.status };
+        }
+        return currentTxn;
+      });
+    });
+
+    // Gracefully terminate streaming listeners on component unmount lifecycle
+    return () => {
+      socket.off('transaction_status_updated');
+      socket.disconnect();
+    };
+  }, [userInfo?.id]);
 
   // Sync state if userInfo updates from parent/database props
   useEffect(() => {
@@ -156,14 +200,14 @@ export default function ProfileSection({
     }
   };
 
-  const totalExchanges = userTransactions.length; 
-  const pendingCount = userTransactions.filter(t => String(t.status) === "0").length; 
+  const totalExchanges = liveTransactions.length; 
+  const pendingCount = liveTransactions.filter(t => String(t.status) === "0").length; 
   
-  const totalSent = userTransactions
+  const totalSent = liveTransactions
     .filter(t => String(t.status) === "1")
     .reduce((acc, curr) => acc + (Number(curr.send_amount) || 0), 0);
     
-  const totalReceived = userTransactions
+  const totalReceived = liveTransactions
     .filter(t => String(t.status) === "1")
     .reduce((acc, curr) => acc + (Number(curr.receive_amount) || 0), 0); 
 
@@ -173,9 +217,9 @@ export default function ProfileSection({
     return createdAtStr.startsWith(todayStr);
   };
 
-  const recentTransactions = userTransactions.filter(txn => checkIsToday(txn.created_at));
+  const recentTransactions = liveTransactions.filter(txn => checkIsToday(txn.created_at));
 
-  const filteredHistoryTransactions = userTransactions.filter(txn => {
+  const filteredHistoryTransactions = liveTransactions.filter(txn => {
     if (!txn.created_at) return false;
     const txnDateOnly = txn.created_at.split(' ')[0]; 
     if (!startDate && !endDate) {

@@ -17,7 +17,7 @@ export default function AuthPage({ onLoginSuccess, onClose }) {
     
     if (isRegister) {
       if (password !== confirmPassword) {
-        alert("⚠️ Passwords do not match! Please check and try again.");
+        alert("Passwords do not match! Please check and try again.");
         return;
       }
 
@@ -46,6 +46,7 @@ export default function AuthPage({ onLoginSuccess, onClose }) {
         const response = await fetch('http://localhost:5000/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ email, password })
         });
         const data = await response.json();
