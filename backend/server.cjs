@@ -1123,35 +1123,51 @@ app.get('/api/user-node/:id', (req, res) => {
 // UPDATE USER PROFILE (Plain Text Password Storage Version)
 app.put('/api/user-node/update/:id', (req, res) => {
     const userId = req.params.id;
-    const { name, phone, email, profile_photo, password } = req.body;
+    const { name, phone, email, profile_photo, oldPassword, password } = req.body;
 
     if (!name || !phone || !email) {
-        return res.status(400).json({ error: "Required fields are missing." });
+        return res.status(400).json({ success: false, error: "Required fields are missing." });
     }
 
     if (password && password.trim() !== "") {
-        const sqlUpdateWithPassword = `UPDATE users SET name = ?, phone = ?, email = ?, profile_photo = ?, password = ? WHERE id = ?`;
+        const sqlCheckUser = `SELECT password FROM users WHERE id = ?`;
         
-        db.query(sqlUpdateWithPassword, [name, phone, email, profile_photo, password, userId], (err, result) => {
+        db.query(sqlCheckUser, [userId], (err, results) => {
             if (err) {
-                console.error("Profile Update Error:", err);
-                return res.status(500).json({ error: "Failed to write updates to Database Controller." });
+                console.error("Database Query Error:", err);
+                return res.status(500).json({ success: false, error: "Database error during validation." });
             }
-            if (result.affectedRows === 0) {
-                return res.status(404).json({ error: "User record updates failed or not found." });
+            if (results.length === 0) {
+                return res.status(404).json({ success: false, error: "User not found." });
             }
-            return res.json({ success: true, message: "Profile and password updated successfully (Plain Text)." });
+
+            const currentDbPassword = results[0].password;
+
+            if (oldPassword !== currentDbPassword) {
+                return res.status(400).json({ success: false, error: "Incorrect old password." });
+            }
+
+            const sqlUpdateWithPassword = `UPDATE users SET name = ?, phone = ?, email = ?, profile_photo = ?, password = ? WHERE id = ?`;
+            
+            db.query(sqlUpdateWithPassword, [name, phone, email, profile_photo, password, userId], (updateErr, result) => {
+                if (updateErr) {
+                    console.error("Profile Update Error:", updateErr);
+                    return res.status(500).json({ success: false, error: "Failed to write updates to Database Controller." });
+                }
+                return res.json({ success: true, message: "Profile and password updated successfully." });
+            });
         });
+
     } else {
         const sqlUpdateWithoutPassword = `UPDATE users SET name = ?, phone = ?, email = ?, profile_photo = ? WHERE id = ?`;
         
         db.query(sqlUpdateWithoutPassword, [name, phone, email, profile_photo, userId], (err, result) => {
             if (err) {
                 console.error("Profile Update Error:", err);
-                return res.status(500).json({ error: "Failed to write updates to Database Controller." });
+                return res.status(500).json({ success: false, error: "Failed to write updates to Database Controller." });
             }
             if (result.affectedRows === 0) {
-                return res.status(404).json({ error: "User record updates failed or not found." });
+                return res.status(404).json({ success: false, error: "User record updates failed or not found." });
             }
             return res.json({ success: true, message: "Profile updated successfully." });
         });

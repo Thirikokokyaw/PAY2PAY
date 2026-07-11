@@ -147,31 +147,20 @@ useEffect(() => {
 }, []);
 
   const handleUpdateUserInfo = async (updatedData) => {
-  if (!userInfo.id) return;
+  if (!userInfo.id) return { success: false, error: "User ID is missing." };
   try {
     const newPhoto = updatedData.profile_photo || updatedData.avatar;
     
-    // Construct the correct payload capturing the new password safely
     const payload = {
       name: updatedData.name,
       phone: updatedData.phone,
       phone_number: updatedData.phone,
       email: updatedData.email,
       profile_photo: newPhoto,
-      password: updatedData.password // Capturing the new password from ProfileView
+      oldPassword: updatedData.oldPassword,
+      password: updatedData.password 
     };
 
-    // Update frontend state first
-    setUserInfo((prev) => ({
-      ...prev,
-      name: updatedData.name,
-      phone: updatedData.phone,
-      email: updatedData.email,
-      avatar: newPhoto,
-      profile_photo: newPhoto
-    }));
-
-    // Call Backend API
     const response = await fetch(`http://localhost:5000/api/user-node/update/${userInfo.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -181,14 +170,22 @@ useEffect(() => {
     const result = await response.json();
 
     if (response.ok && result.success) {
-      // Re-fetch to sync database with frontend state controller
+      setUserInfo((prev) => ({
+        ...prev,
+        name: updatedData.name,
+        phone: updatedData.phone,
+        email: updatedData.email,
+        avatar: newPhoto,
+        profile_photo: newPhoto
+      }));
+      
       await fetchDatabaseRecords(userInfo.id); 
-      alert("Password and Profile updated successfully in Database!");
+      return { success: true }; 
     } else {
-      alert(result.error || "Failed to save response to database");
+      return { success: false, error: result.error || "Failed to update profile." };
     }
   } catch (err) {
-    alert("Connection to database failed");
+    return { success: false, error: "Connection to database failed." };
   }
 };
 
