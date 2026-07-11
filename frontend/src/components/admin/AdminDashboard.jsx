@@ -41,6 +41,8 @@ export default function AdminDashboard({ onLogout, adminData, setAdminData }) {
   // Profile dropdown menu control
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef(null);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -221,7 +223,7 @@ export default function AdminDashboard({ onLogout, adminData, setAdminData }) {
         </div>
        <div className={`p-4 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-500/10'}`}>
   <button
-    onClick={onLogout}
+    onClick={() => setIsLogoutModalOpen(true)}
     className={`w-full rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer border ${
       isDarkMode 
         ? 'border-slate-800 bg-slate-900 text-rose-400 hover:bg-slate-800' 
@@ -398,7 +400,50 @@ export default function AdminDashboard({ onLogout, adminData, setAdminData }) {
           {renderActiveView()}
         </main>
       </div>
-
+{/* ========================================== */}
+      {/* LOGOUT CONFIRMATION MODAL UI */}
+      {/* ========================================== */}
+      {isLogoutModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop Blur Overly */}
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsLogoutModalOpen(false)} />
+          
+          {/* Modal Content Box */}
+          <div className={`relative w-full max-w-sm rounded-2xl p-6 border shadow-2xl transition-all ${
+            isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-800'
+          }`}>
+            <div className="flex flex-col items-center text-center">
+              <div className="h-12 w-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mb-4">
+                <LogOut size={24} />
+              </div>
+              <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>Confirm Logout</h3>
+              <p className={`text-xs mt-2 ${theme.textMuted}`}>Are you sure you want to log out? </p>
+            </div>
+            
+            <div className="flex items-center gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setIsLogoutModalOpen(false)}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-bold border cursor-pointer ${
+                  isDarkMode ? 'border-slate-800 bg-slate-800/50 text-slate-300 hover:bg-slate-800' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLogoutModalOpen(false);
+                  onLogout();
+                }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-rose-500 text-white hover:bg-rose-600 transition shadow-lg shadow-rose-500/15 cursor-pointer"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

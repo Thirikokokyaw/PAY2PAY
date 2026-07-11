@@ -3,7 +3,7 @@ import { ThemeContext } from '../App';
 import { 
   Clock, ArrowRight, Camera, User, Phone, Mail, LogOut, 
   Pencil, RefreshCw, ArrowUpRight, ArrowDownLeft, Calendar, 
-  CheckCircle, Download, X, FileText, HelpCircle, Send
+  CheckCircle, Download, X, FileText, HelpCircle, Send, ShieldAlert, KeyRound
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { io } from 'socket.io-client';
@@ -30,12 +30,24 @@ export default function ProfileSection({
   // Voucher Modal States
   const [selectedTxn, setSelectedTxn] = useState(null);
   const [showVoucher, setShowVoucher] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   // Form States (Edit Profile)
   const [editName, setEditName] = useState(userInfo.name);
   const [editPhone, setEditPhone] = useState(userInfo.phone);
   const [editEmail, setEditEmail] = useState(userInfo.email);
   const [tempAvatar, setTempAvatar] = useState(userInfo.profile_photo);
+
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [oldPasswordError, setOldPasswordError] = useState("");
+  const [newPasswordError, setNewPasswordError] = useState("");
+  const [confirmPasswordError, setConfirmPasswordError] = useState("");
+  const [passwordForm, setPasswordForm] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
 
   // Support Helpdesk States
   const [fromPay, setFromPay] = useState('KPay');
@@ -103,7 +115,7 @@ export default function ProfileSection({
   }, [userInfo?.id]);
 
   // Sync state if userInfo updates from parent/database props
-  /*
+  
   useEffect(() => {
     setEditName(userInfo.name);
     setEditPhone(userInfo.phone);
@@ -124,8 +136,56 @@ export default function ProfileSection({
     }
     setIsEditing(false);
     alert("Profile details have been updated in the database system successfully.");
-  };*/
+  };
   // Add this inside your ProfileSection component
+  const handlePasswordSubmit = async (e) => {
+  e.preventDefault();
+  
+  setOldPasswordError("");
+  setNewPasswordError("");
+  setConfirmPasswordError("");
+  
+  if (!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      alert("Please fill all password fields.");
+      return;
+    }
+    
+  // 1. New Password 
+  if (passwordForm.newPassword.length < 8) {
+    setNewPasswordError("Password must be at least 8 characters long.");
+    return;
+  }
+
+  // 2. Confirm Password 
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    setConfirmPasswordError("Confirm password does not match new password.");
+    return;
+  }
+
+  if (setUserInfo) {
+    const res = await setUserInfo({
+      ...userInfo,
+      name: editName,
+      phone: editPhone,
+      email: editEmail,
+      profile_photo: tempAvatar,
+      oldPassword: passwordForm.oldPassword, 
+      password: passwordForm.newPassword
+    });
+
+    if (res && res.success) {
+      setIsPasswordModalOpen(false);
+      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+      alert("Password changed successfully.");
+    } else {
+      if (res.error && res.error.toLowerCase().includes("old password")) {
+        setOldPasswordError(res.error);
+      } else {
+        setConfirmPasswordError(res.error || "An error occurred.");
+      }
+    }
+  }
+};
 useEffect(() => {
   const fetchTickets = async () => {
     try {
@@ -348,7 +408,7 @@ useEffect(() => {
         <button onClick={() => { setActiveTab('history'); setIsEditing(false); }} className={`w-full py-2.5 px-4 text-left rounded-xl text-xs font-bold transition flex items-center gap-2.5 ${activeTab === 'history' ? (isDarkMode ? 'bg-slate-950 text-yellow-400 border border-slate-800' : 'bg-amber-50 text-amber-600') : 'opacity-75'}`}><Clock size={15} /> Transaction History</button>
         <button onClick={() => { setActiveTab('support'); setIsEditing(false); }} className={`w-full py-2.5 px-4 text-left rounded-xl text-xs font-bold transition flex items-center gap-2.5 ${activeTab === 'support' ? (isDarkMode ? 'bg-slate-950 text-yellow-400 border border-slate-800' : 'bg-amber-50 text-amber-600') : 'opacity-75'}`}><HelpCircle size={15} /> Support Helpdesk</button>
         
-        <div className={`pt-4 border-t ${themeClasses.borderSeparator} mt-4`}><button onClick={onLogout} className="w-full text-xs bg-rose-500/10 border text-rose-500 py-2.5 rounded-xl transition font-bold flex items-center justify-center gap-2"><LogOut size={14}/> Logout</button></div>
+        <div className={`pt-4 border-t ${themeClasses.borderSeparator} mt-4`}><button onClick={() => setIsLogoutModalOpen(true)} className="w-full text-xs bg-rose-500/10 border text-rose-500 py-2.5 rounded-xl transition font-bold flex items-center justify-center gap-2"><LogOut size={14}/> Logout</button></div>
       </div>
 
       {/* MAIN INTERACTIVE VIEWPORT */}
@@ -408,11 +468,17 @@ useEffect(() => {
                     <div><label className={`block text-[10px] font-bold uppercase mb-1.5 ${themeClasses.textSub}`}>Phone Number</label><div className={`flex items-center border rounded-xl px-3 py-2.5 ${themeClasses.inputBg}`}><Phone size={14} className="mr-2 opacity-50" /><input type="tel" required value={editPhone} onChange={(e)=>setEditPhone(e.target.value)} className="bg-transparent text-xs w-full focus:outline-none font-mono" /></div></div>
                   </div>
                 </div>
+                <div className="mt-6 pt-4 border-t border-slate-500/10 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+                    <button type="button" onClick={() => setIsPasswordModalOpen(true)} className={`w-full sm:w-auto justify-center px-4 py-2 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all cursor-pointer ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'}`}>
+                      <KeyRound size={14} className="text-amber-500" /> Change Password
+                    </button>
+                  </div>
                 <div className="flex items-center gap-3 pt-2">
                   <button type="button" onClick={() => setIsEditing(false)} className={`flex-1 border py-2.5 rounded-xl text-xs font-bold ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-200 text-slate-700'}`}>Cancel</button>
                   <button type="submit" className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 uppercase shadow-lg"><CheckCircle size={14} /> Save Changes</button>
                 </div>
               </form>
+           
             )}
           </>
         )}
@@ -534,8 +600,103 @@ useEffect(() => {
               </div>
             </div>
           </div>
+          
         </div>
       )}
+      {/* Password Modal */}
+                {isPasswordModalOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsPasswordModalOpen(false)} />
+                    <div className={`relative w-full max-w-md p-5 sm:p-6 rounded-2xl border shadow-2xl transition-all animate-in zoom-in-95 duration-150 ${isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
+                      <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-500/10">
+                        <div className="flex items-center gap-2 text-amber-500"><ShieldAlert size={18} /><span className="text-sm font-black tracking-tight">Change Password</span></div>
+                        <button type="button" onClick={() => setIsPasswordModalOpen(false)} className={`p-1.5 rounded-lg border transition-all cursor-pointer ${isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-400' : 'border-slate-200 hover:bg-slate-50 text-slate-500'}`}><X size={16} /></button>
+                      </div>
+                      <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                        <div>
+                          <label className={`block text-[10px] font-black uppercase tracking-wider mb-1.5 ${themeClasses.textMuted}`}>Old Password</label>
+                          <input type="password" required value={passwordForm.oldPassword} onChange={(e) => {
+                            setPasswordForm(prev => ({ ...prev, oldPassword: e.target.value }));
+                            setOldPasswordError('');
+                          }} className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-amber-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} placeholder="••••••••" />
+                          {oldPasswordError && (
+                            <p style={{ color: 'red', fontSize: '12px', marginTop: '5px' }}>
+                              {oldPasswordError}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className={`block text-[10px] font-black uppercase tracking-wider mb-1.5 ${themeClasses.textMuted}`}>New Password</label>
+                          <input type="password" required value={passwordForm.newPassword} onChange={(e) => {
+                            setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }));
+                            setNewPasswordError('');
+                          }} className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-amber-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} placeholder="Minimum 8 characters" />
+                          
+                         {newPasswordError && (
+                              <p style={{ color: 'red', fontSize: '12px', marginTop: '5px' }}>{newPasswordError}</p>
+                            )}
+                        </div>
+                        <div>
+                          <label className={`block text-[10px] font-black uppercase tracking-wider mb-1.5 ${themeClasses.textMuted}`}>Confirm New Password</label>
+                          <input type="password" required value={passwordForm.confirmPassword} onChange={(e) => {
+                            setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }));
+                            setConfirmPasswordError('');
+                          }} className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-amber-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} placeholder="Re-enter new password" />
+                          {confirmPasswordError && (
+                              <p style={{ color: 'red', fontSize: '12px', marginTop: '5px' }}>{confirmPasswordError}</p>
+                            )}
+                        </div>
+                        <div className="pt-2 flex justify-end gap-2">
+                          <button type="button" onClick={() => setIsPasswordModalOpen(false)} className={`px-4 py-2 text-xs font-bold rounded-xl border cursor-pointer ${isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-400' : 'border-slate-200 hover:bg-slate-50 text-slate-500'}`}>Dismiss</button>
+                          <button type="submit" className="px-4 py-2 text-xs font-extrabold rounded-xl bg-amber-500 text-slate-950 hover:brightness-110 transition-all shadow-md shadow-amber-500/15 cursor-pointer">Change</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+                 {/*LOGOUT CONFIRMATION MODAL UI */}
+      {isLogoutModalOpen && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+          {/* Backdrop Blur Overlay */}
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsLogoutModalOpen(false)} />
+          
+          {/* Modal Content Box */}
+          <div className={`relative w-full max-w-sm rounded-2xl p-6 border shadow-2xl transition-all ${
+            isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-800'
+          }`}>
+            <div className="flex flex-col items-center text-center">
+              <div className="h-12 w-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mb-4">
+                <LogOut size={24} />
+              </div>
+              <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>Confirm Logout</h3>
+              <p className={`text-xs mt-2 ${themeClasses.textSub}`}>Are you sure you want to log out?</p>
+            </div>
+            
+            <div className="flex items-center gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setIsLogoutModalOpen(false)}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-bold border cursor-pointer ${
+                  isDarkMode ? 'border-slate-800 bg-slate-800/50 text-slate-300 hover:bg-slate-800' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLogoutModalOpen(false);
+                  onLogout();
+                }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-rose-500 text-white hover:bg-rose-600 transition shadow-lg shadow-rose-500/15 cursor-pointer"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
     </div>
   );
 }
