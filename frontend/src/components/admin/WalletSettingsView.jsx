@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ToggleLeft, ToggleRight, QrCode, RefreshCw, Edit3, X, Save, Upload, Plus, Wallet } from 'lucide-react';
+import Swal from 'sweetalert2';
 
 export default function WalletSettingsView({ theme, isDarkMode = false, onWalletUpdated }) {
   const [wallets, setWallets] = useState([]);
@@ -128,6 +129,30 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
 
   const handleToggleActive = async (wallet) => {
     const nextActiveState = wallet.is_active === 'Y' ? 'N' : 'Y';
+    const result = await Swal.fire({
+      html: `
+        <div class="flex flex-col items-center">            
+          <h2 class="text-sm font-bold text-slate-800 m-0 mb-5">
+            ${wallet.is_active === 'Y' ? 'Freeze Wallet?' : 'Activate Wallet?'}
+          </h2>             
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonColor: wallet.is_active === 'Y' ? '#e11d48' : '#10b981',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: wallet.is_active === 'Y' ? 'Freeze' : 'Activate',
+      reverseButtons: true,
+      width: '260px',
+      customClass: {
+        popup: '!p-4 !rounded-xl !h-auto',
+        actions: '!mt-0 !mb-0 !gap-2',
+        confirmButton: '!text-[11px] !px-3 !py-1.5 !m-0 !rounded-lg !font-semibold',
+        cancelButton: '!text-[11px] !px-3 !py-1.5 !m-0 !rounded-lg !font-semibold'
+      }
+    });
+
+    if (!result.isConfirmed) return;
+
     setWallets(prev => prev.map(w => 
       w.wallet_id === wallet.wallet_id ? { ...w, is_active: nextActiveState } : w
     ));
