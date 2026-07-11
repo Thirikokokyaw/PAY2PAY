@@ -60,7 +60,7 @@ export default function MaintenanceView({
       }
 
       if (updatedFields.fee_rate !== undefined) {
-        alert(`Success: Service Fee Rate has been updated to ${updatedFields.fee_rate}%.`);
+        alert(`Success: Service Fee Rate has been updated!.`);
       }
 
       if (updatedFields.is_platform_online !== undefined) {
@@ -106,7 +106,7 @@ export default function MaintenanceView({
               <input 
                 type="number" 
                 step="0.01"
-                value={feeRate || ''} 
+                value={feeRate !== undefined && feeRate !== null ? feeRate : 2}
                 onChange={e => setFeeRate(e.target.value)}
                 onBlur={() => handleUpdateSettings({ fee_rate: parseFloat(feeRate) })} 
                 className={`w-24 rounded-xl px-4 py-2 text-xs focus:outline-none ${theme.input}`} 

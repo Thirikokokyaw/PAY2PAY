@@ -183,30 +183,48 @@ app.post('/api/wallets/create', async (req, res) => {
 
 // WALLET Update COBOL Engine API Route
 app.post('/api/wallets/update-details', async (req, res) => {
-    try {
-        const { 
-            wallet_id, wallet_name, account_number, account_holder, 
-            qr_code_path, current_balance, limit_warning 
-        } = req.body;
+  try {
+    const { 
+      wallet_id, wallet_name, account_number, account_holder, 
+      qr_code_path, current_balance, limit_warning, is_active, isToggleAction
+    } = req.body;
 
-        let finalImagePath = qr_code_path;
-        if (qr_code_path && qr_code_path.startsWith('data:image')) {
-            finalImagePath = saveBase64Image(qr_code_path);
+
+    let finalImagePath = qr_code_path;
+    if (qr_code_path && qr_code_path.startsWith('data:image')) {
+      finalImagePath = saveBase64Image(qr_code_path);
+    }
+
+    const runCobolEngine = (balance) => {
+      return new Promise((resolve) => {
+        if (isToggleAction && is_active) {
+          return resolve(is_active);
         }
+        const cobolCommand = `check_balance.exe ${balance}`;
+        exec(cobolCommand, (error, stdout) => {
+          if (!error && stdout) {
+            resolve(stdout.trim().toUpperCase());
+          } else {
+            const state = Number(balance) < 1000 ? 'N' : 'Y';
+            resolve(state);
+          }
+        });
+      });
+    };
 
-        const runCobolEngine = (balance) => {
-            return new Promise((resolve) => {
-                const cobolCommand = `check_balance.exe ${balance}`;
-                exec(cobolCommand, (error, stdout) => {
-                    if (!error && stdout) {
-                        resolve(stdout.trim().toUpperCase());
-                    } else {
-                        const state = Number(balance) < 1000 ? 'N' : 'Y';
-                        resolve(state);
-                    }
-                });
-            });
-        };
+    const calculatedActiveState = await runCobolEngine(current_balance);
+
+    const updateSql = `
+      UPDATE wallets 
+      SET wallet_name = ?, 
+          account_number = ?, 
+          account_holder = ?, 
+          qr_code_path = ?, 
+          current_balance = ?, 
+          limit_warning = ?, 
+          is_active = ? 
+      WHERE wallet_id = ?
+    `;
 
         const calculatedActiveState = await runCobolEngine(current_balance);
 
