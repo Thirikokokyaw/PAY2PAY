@@ -1079,38 +1079,44 @@ app.get('/api/user-node/:id', (req, res) => {
     });
 });
 
-// UPDATE USER PROFILE (Refactored to Standard Callback)
+// UPDATE USER PROFILE (Plain Text Password Storage Version)
 app.put('/api/user-node/update/:id', (req, res) => {
     const userId = req.params.id;
-    const { name, phone, email, profile_photo } = req.body;
+    const { name, phone, email, profile_photo, password } = req.body;
 
     if (!name || !phone || !email) {
         return res.status(400).json({ error: "Required fields are missing." });
     }
 
-    const sqlUpdate = `UPDATE users SET name = ?, phone = ?, email = ?, profile_photo = ? WHERE id = ?`;
-
-    db.query(sqlUpdate, [name, phone, email, profile_photo, userId], (err, result) => {
-        if (err) {
-            console.error("Profile Update Error:", err);
-            return res.status(500).json({ error: "Failed to write updates to Database Controller." });
-        }
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ error: "User record updates failed or not found." });
-        }
-
-        // Socket.io Broadcast: Trigger real-time visual change on administrative profiles grid
-        io.emit('profile_updated', { userId, name, phone, email, profile_photo });
-
-        res.json({ 
-            success: true, 
-            message: "Profile node and database storage updated successfully." 
+    if (password && password.trim() !== "") {
+        const sqlUpdateWithPassword = `UPDATE users SET name = ?, phone = ?, email = ?, profile_photo = ?, password = ? WHERE id = ?`;
+        
+        db.query(sqlUpdateWithPassword, [name, phone, email, profile_photo, password, userId], (err, result) => {
+            if (err) {
+                console.error("Profile Update Error:", err);
+                return res.status(500).json({ error: "Failed to write updates to Database Controller." });
+            }
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ error: "User record updates failed or not found." });
+            }
+            return res.json({ success: true, message: "Profile and password updated successfully (Plain Text)." });
         });
-    });
+    } else {
+        const sqlUpdateWithoutPassword = `UPDATE users SET name = ?, phone = ?, email = ?, profile_photo = ? WHERE id = ?`;
+        
+        db.query(sqlUpdateWithoutPassword, [name, phone, email, profile_photo, userId], (err, result) => {
+            if (err) {
+                console.error("Profile Update Error:", err);
+                return res.status(500).json({ error: "Failed to write updates to Database Controller." });
+            }
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ error: "User record updates failed or not found." });
+            }
+            return res.json({ success: true, message: "Profile updated successfully." });
+        });
+    }
 });
-
-// FETCH ALL ADMINS
+//  FETCH ALL ADMINS
 app.get('/api/admins', (req, res) => {
     const query = `
         SELECT id, name, email, phone, role, status, isBlacklisted 
