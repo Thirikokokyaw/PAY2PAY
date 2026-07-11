@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search } from 'lucide-react';
+import Swal from 'sweetalert2';
+
 
 export function UserManagementView({ activeView, theme = {}, isDarkMode = false }) {
   const [users, setUsers] = useState([]);
@@ -22,52 +24,143 @@ export function UserManagementView({ activeView, theme = {}, isDarkMode = false 
   }, [activeView]);
 
   // Block / Unblock 
-  const handleToggleUserStatus = async (userId, currentStatus) => {
+ const handleToggleUserStatus = async (userId, currentStatus) => {
     const nextStatus = currentStatus === 'Blocked' ? 'Active' : 'Blocked';
+    const result = await Swal.fire({
+      html: `
+        <div class="flex flex-col items-center">            
+          <h2 class="text-sm font-bold text-slate-800 m-0 mb-5">
+            ${currentStatus === 'Active' ? 'Block Account?' : 'Unblock Account?'}
+          </h2>             
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonColor: currentStatus === 'Active' ? '#e11d48' : '#10b981', 
+      cancelButtonColor: '#64748b',  
+      confirmButtonText: currentStatus === 'Active' ? 'Block' : 'Unblock',
+      reverseButtons: true, 
+      width: '260px', 
+      customClass: {
+        popup: '!p-4 !rounded-xl !h-auto',
+        actions: '!mt-0 !mb-0 !gap-2',
+        confirmButton: '!text-[11px] !px-3 !py-1.5 !m-0 !rounded-lg !font-semibold',
+        cancelButton: '!text-[11px] !px-3 !py-1.5 !m-0 !rounded-lg !font-semibold'
+      }
+    });
+
+  if (!result.isConfirmed) return;
+
+  try {
+    const response = await fetch(`http://localhost:5000/api/admin/users/${userId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: nextStatus })
+    });
     
-    try {
-      const response = await fetch(`http://localhost:5000/api/admin/users/${userId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus })
+    const data = await response.json();
+    if (response.ok) {
+      fetchUsers();
+    } 
+    else {
+            Swal.fire({
+        html: `
+          <div class="flex flex-col items-center">            
+            <h2 class="text-sm font-bold text-slate-800 m-0 mb-5">Error!</h2>             
+            <p class="text-[11px] text-slate-500 m-0">${data.message}</p>
+          </div>
+        `,
+        width: '260px',
+        confirmButtonColor: '#64748b',
+        customClass: {
+          popup: '!p-4 !rounded-xl !h-auto',
+          actions: '!mt-3 !mb-0',
+          confirmButton: '!text-[11px] !px-4 !py-1.5 !m-0 !rounded-lg !font-semibold'
+        }
       });
-      
-      const data = await response.json();
-      if (response.ok) {
-        alert("Updated");
-        fetchUsers(); 
-      } else {
-        alert( data.message);
-      }
-    } catch (error) {
-      alert("Status modification failed.");
     }
-  };
-
-  //  Blacklist Toggle 
-  const handleToggleBlacklist = async (userId) => {
-    try {
-      const response = await fetch(`http://localhost:5000/api/admin/users/${userId}/toggle-blacklist`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
+  } 
+  catch (error) {
+    Swal.fire({
+      html: `
+        <div class="flex flex-col items-center">            
+          <h2 class="text-sm font-bold text-slate-800 m-0 mb-5">Failed!</h2>             
+          <p class="text-[11px] text-slate-500 m-0">Status modification failed.</p>
+        </div>
+      `,
+      width: '260px',
+      confirmButtonColor: '#64748b',
+      customClass: {
+        popup: '!p-4 !rounded-xl !h-auto',
+        actions: '!mt-3 !mb-0',
+        confirmButton: '!text-[11px] !px-4 !py-1.5 !m-0 !rounded-lg !font-semibold'
       }
+    });
+  }
+};
 
-      const data = await response.json();
-      alert( data.message);
-      
-      fetchUsers(); //Blacklisted 
-    } catch (error) {
-      console.error("Blacklist UI trigger failed:", error);
+//  Blacklist Toggle 
+const handleToggleBlacklist = async (userId, userIsBlacklisted) => {
+  // Confirm Box
+  const result = await Swal.fire({
+    html: `
+      <div class="flex flex-col items-center">            
+        <h2 class="text-sm font-bold text-slate-800 m-0 mb-5">
+          ${userIsBlacklisted === 1 ? 'Remove Blacklist?' : 'Add Blacklist?'}
+        </h2>             
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonColor: userIsBlacklisted === 1 ? '#10b981' : '#e11d48',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: userIsBlacklisted === 1 ? 'Unblacklist' : 'Blacklist',
+    reverseButtons: true,
+    width: '260px', 
+    customClass: {
+      popup: '!p-4 !rounded-xl !h-auto',
+      actions: '!mt-0 !mb-0 !gap-2',
+      confirmButton: '!text-[11px] !px-3 !py-1.5 !m-0 !rounded-lg !font-semibold',
+      cancelButton: '!text-[11px] !px-3 !py-1.5 !m-0 !rounded-lg !font-semibold'
     }
-  };
+  });
+
+  if (!result.isConfirmed) return;
+
+  try {
+    const response = await fetch(`http://localhost:5000/api/admin/users/${userId}/toggle-blacklist`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) throw new Error('Network response was not ok');
+    fetchUsers(); 
+  } 
+  catch (error) { 
+    Swal.fire({
+      html: `
+        <div class="flex flex-col items-center">            
+          <h2 class="text-sm font-bold text-slate-800 m-0 mb-5">Error!</h2>             
+          <p class="text-[11px] text-slate-500 m-0">Blacklist UI trigger failed.</p>
+        </div>
+      `,
+      width: '260px',
+      confirmButtonColor: '#64748b',
+      customClass: {
+        popup: '!p-4 !rounded-xl !h-auto',
+        actions: '!mt-3 !mb-0',
+        confirmButton: '!text-[11px] !px-4 !py-1.5 !m-0 !rounded-lg !font-semibold'
+      }
+    });
+  }
+};
+
+
   if (activeView !== 'users') return null;
-  const filteredUsers = users.filter((u) => {
+    const filteredUsers = users.filter((u) => {
     const matchesRole = u.role === 'user' || !u.role; // role  default user 
-    const matchesSearch = u.phone && u.phone.includes(userSearch);
+    const searchLower = userSearch.toLowerCase();
+    const matchesName = u.name && u.name.toLowerCase().includes(searchLower);
+    const matchesPhone = u.phone && u.phone.includes(userSearch);
+    const matchesSearch = matchesName || matchesPhone;
     return matchesRole && matchesSearch;
   });
 
@@ -76,10 +169,10 @@ export function UserManagementView({ activeView, theme = {}, isDarkMode = false 
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
           <h2 className={`text-xl font-extrabold tracking-tight uppercase ${theme.textTitle || ''}`}>
-            User Ledger Registry
+            User Directory & Access Control
           </h2>
           <p className={`text-xs mt-1 ${theme.textMuted || ''}`}>
-            Manage network access limitations and account standing status
+            Manage user access permissions, block accounts, or handle blacklist status
           </p>
         </div>
 
@@ -88,11 +181,11 @@ export function UserManagementView({ activeView, theme = {}, isDarkMode = false 
           <Search size={16} className="absolute left-3.5 top-3 text-slate-400" />
           <input
             type="text"
-            placeholder="Filter by phone index number..."
+            placeholder="Search by name or phone..."
             value={userSearch}
             onChange={(e) => setUserSearch(e.target.value)}
-            className={`w-full rounded-xl pl-10 pr-4 py-2.5 text-xs focus:outline-none placeholder-slate-400 ${theme.input || ''}`}
-          />
+            className={`w-full rounded-xl border border-slate-300 dark:border-slate-700 pl-10 pr-4 py-2.5 text-xs focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 placeholder-slate-400 ${theme.input || ''}`}
+            />
         </div>
       </div>
 
@@ -140,16 +233,17 @@ export function UserManagementView({ activeView, theme = {}, isDarkMode = false 
                       onClick={() => handleToggleUserStatus(user.id, user.status)} 
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${user.status === 'Active' ? 'bg-slate-500/10 text-slate-600 border-slate-300 dark:text-slate-300 dark:border-slate-700' : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'}`}
                     >
-                      {user.status === 'Active' ? 'Block Access' : 'Unblock Account'}
+                      {user.status === 'Active' ? 'Block Account' : 'Unblock Account'}
                     </button>
                     
                     {/*  Blacklist Toggle Button */}
                     <button 
-                      onClick={() => handleToggleBlacklist(user.id)} 
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${user.isBlacklisted === 1 ? 'bg-rose-600 text-white border-rose-600 hover:bg-rose-700' : 'bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500/20'}`}
-                    >
-                      {user.isBlacklisted === 1 ? 'Remove Flag' : 'Add Blacklist'}
-                    </button>
+                    onClick={() => handleToggleBlacklist(user.id, user.isBlacklisted)} 
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${user.isBlacklisted === 1 ? 'bg-rose-600 text-white border-rose-600 hover:bg-rose-700' : 'bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500/20'}`}
+                  >
+                    {user.isBlacklisted === 1 ? 'Remove Blacklist' : 'Add Blacklist'}
+                  </button>
+
 
                   </td>
                 </tr>
