@@ -1227,25 +1227,51 @@ app.post('/api/admins', (req, res) => {
 // REVOKE ADMIN PROTOCOL
 app.patch('/api/admins/revoke/:id', (req, res) => {
     const adminId = req.params.id;
+    
+    const { status, isBlacklisted } = req.body;
+
+    if (!status || isBlacklisted === undefined) {
+        return res.status(400).json({ 
+            success: false, 
+            error: "Missing required payload: status and isBlacklisted are required." 
+        });
+    }
 
     db.query("SELECT email FROM users WHERE id = ?", [adminId], (searchErr, rows) => {
-        if (searchErr) return res.status(500).json({ error: searchErr.message });
-        if (rows.length === 0) return res.status(404).json({ error: "Admin node not found." });
+        if (searchErr) {
+            console.error("SQL Admin Search Error:", searchErr.message);
+            return res.status(500).json({ success: false, error: searchErr.message });
+        }
+        
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, error: "Admin node not found." });
+        }
 
         if (rows[0].email === 'admin@pay2pay.com') {
-            return res.status(403).json({ error: "Action Terminated: Cannot revoke Super Admin Node." });
+            return res.status(403).json({ 
+                success: false, 
+                error: "Action Terminated: Cannot alter Super Admin Node security state." 
+            });
         }
-        const updateQuery = "UPDATE users SET status = 'Revoked', isBlacklisted = 1 WHERE id = ?";
-        db.query(updateQuery, [adminId], (updateErr) => {
+
+        const updateQuery = "UPDATE users SET status = ?, isBlacklisted = ? WHERE id = ?";
+        
+        db.query(updateQuery, [status, isBlacklisted, adminId], (updateErr, result) => {
             if (updateErr) {
-                console.error(" SQL Revoke Admin Error:", updateErr.message);
-                return res.status(500).json({ error: updateErr.message });
+                console.error("SQL Update Execution Error:", updateErr.message);
+                return res.status(500).json({ success: false, error: updateErr.message });
             }
 
-            // Socket.io Broadcast: Instantly force disconnect revoked operator nodes
-            io.emit('admin_revoked', { adminId });
+            io.emit('admin_status_changed', { 
+                adminId, 
+                status, 
+                isBlacklisted 
+            });
 
-            res.json({ success: true, message: "Operator terminated successfully from server node." });
+            return res.json({ 
+                success: true, 
+                message: `Admin node access privileges successfully set to [${status}].` 
+            });
         });
     });
 });

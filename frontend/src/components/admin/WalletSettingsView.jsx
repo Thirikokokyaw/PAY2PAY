@@ -193,6 +193,8 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
         <div>
           <h2 className={`text-xl font-extrabold tracking-tight uppercase ${theme.textTitle}`}>Wallet & Limits Framework</h2>
+          <p className={`text-xs mt-1 ${theme.textMuted}`}>Authorize financial access tiers, enforce volume caps, and oversee internal liquidity nodes.</p>
+
         </div>
         <div className="flex gap-2 w-full sm:w-auto items-center font-sans">
           <button 
@@ -202,14 +204,6 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
             <Plus size={15} strokeWidth={2.5} /> ADD NEW WALLET
           </button>
           
-          <button 
-            onClick={() => fetchWalletsFromDatabase(true)}
-            disabled={isRefreshing}
-            title="Refresh System Data"
-            className={`flex items-center justify-center p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 transition-all active:scale-95 ${theme.card}`}
-          >
-            <RefreshCw size={15} className={isRefreshing ? 'animate-spin text-amber-500' : 'text-slate-500 dark:text-slate-400'} />
-          </button>
         </div>
       </div>
 
