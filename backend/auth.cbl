@@ -16,6 +16,7 @@
        01  WS-COUNTERS.
            05 I               PIC 9(3) VALUE 1.
            05 PHONE-LEN       PIC 9(2) VALUE 0.
+           05 PASS-LEN         PIC 9(2) VALUE 0.
            05 AT-POS          PIC 9(2) VALUE 0.
            05 DOT-POS         PIC 9(2) VALUE 0.
 
@@ -59,6 +60,21 @@
                        TO WS-MSG
                    PERFORM DISPLAY-AND-EXIT
                END-IF
+
+           MOVE 0 TO PASS-LEN
+           PERFORM VARYING I FROM 1 BY 1 UNTIL I > 50
+               IF WS-PASSWORD(I:1) NOT = SPACE AND 
+                  WS-PASSWORD(I:1) NOT = LOW-VALUES
+                   ADD 1 TO PASS-LEN
+               END-IF
+           END-PERFORM
+           
+           IF PASS-LEN < 8
+               MOVE 'ERROR' TO WS-STATUS
+               MOVE 'Password must be at least 8 characters long.'
+                   TO WS-MSG
+               PERFORM DISPLAY-AND-EXIT
+           END-IF
 
                PERFORM VARYING I FROM 1 BY 1 UNTIL I > 49
                    IF WS-EMAIL(I:2) = '@.' OR WS-EMAIL(I:2) = '.@'
