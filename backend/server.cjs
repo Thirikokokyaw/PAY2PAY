@@ -1355,7 +1355,7 @@ app.get('/api/dashboard/diagnostics', async (req, res) => {
     try {
         const today = new Date().toISOString().split('T')[0];
         
-        // daily_settlements table data 
+        // daily_settlements table 
         const [rows] = await db.promise().query(
             'SELECT * FROM daily_settlements WHERE settlement_date = ?', 
             [today]
@@ -1387,6 +1387,27 @@ app.get('/api/dashboard/history', async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.get('/api/admin/approved-transactions', async (req, res) => {
+    const { startDate, endDate } = req.query;
+    try {
+        const sql = `
+            SELECT t.*, u.name AS user_name 
+            FROM exchange_transactions t 
+            JOIN users u ON t.user_id = u.id 
+            WHERE t.status = '1' 
+            AND DATE(t.created_at) BETWEEN ? AND ?
+            ORDER BY t.created_at DESC
+        `;
+        
+        const [transactionData] = await db.promise().query(sql, [startDate, endDate]);
+        
+        res.json({ success: true, data: transactionData });
+    } catch (error) {
+        console.error("Error:", error);
+        res.status(500).json({ success: false, message: 'Error fetching data' });
     }
 });
 

@@ -21,6 +21,7 @@ import {
 
 import DiagnosticsView from './DiagnosticsView';
 import VerificationView from './VerificationView';
+import ApprovedTransactionsView from './ApprovedTransactionsView';
 import { UserManagementView } from './UserManagementView';
 import AdminManagementView from './AdminManagementView';
 import WalletSettingsView from './WalletSettingsView';
@@ -111,6 +112,7 @@ export default function AdminDashboard({ onLogout, adminData, setAdminData }) {
   const navigationItems = [
     { id: 'dashboard', label: 'Dashboard & Reports', icon: <LayoutDashboard size={16} />, count: 0 },
     { id: 'verification', label: 'Txn Verification', icon: <CheckSquare size={16} />, count: transactions.filter(t => t.status === 'Pending').length },
+    { id: 'approved', label: 'Approved History', icon: <CheckSquare size={16} /> },
     { id: 'support', label: 'Support Tickets', icon: <MessageSquare size={16} />, count: tickets.filter(t => t.status === 'Pending').length },
     { id: 'users', label: 'User Management', icon: <Users size={16} /> },
     { id: 'admins', label: 'Admin Management', icon: <ShieldAlert size={16} />, count: 0 },
@@ -123,6 +125,7 @@ export default function AdminDashboard({ onLogout, adminData, setAdminData }) {
     switch (activeView) {
       case 'dashboard': return <DiagnosticsView theme={theme} isDarkMode={isDarkMode} feeRate={feeRate} transactions={transactions} />;
       case 'verification': return <VerificationView theme={theme} transactions={transactions} setTransactions={setTransactions} />;
+      case 'approved': return <ApprovedTransactionsView theme={theme} isDarkMode={isDarkMode} />;
       case 'support': return <SupportTicketsView theme={theme} isDarkMode={isDarkMode} tickets={tickets} setTickets={setTickets} />;
       case 'users':
         return (
