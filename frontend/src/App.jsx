@@ -130,12 +130,12 @@ useEffect(() => {
           }
         }
       } else {
-        // 💡 401 ဖြစ်တဲ့အခါ Console မှာ အနီရောင်မပြဘဲ ဒီအတိုင်း Guest အဖြစ် သတ်မှတ်လိုက်မယ်
+        // Guest
         setUserRole('guest');
         console.log("Session Information: No active session found (User is Guest).");
       }
     } catch (error) {
-      // ဒါက တကယ့် Server ပွင့်မနေတာမျိုး (Network Down) ဖြစ်မှသာ အလုပ်လုပ်မှာပါ
+      // Server Network Down
       console.error("Network link to auth engine failed:", error);
       setUserRole('guest');
     } finally {
@@ -160,6 +160,16 @@ useEffect(() => {
       oldPassword: updatedData.oldPassword,
       password: updatedData.password 
     };
+
+    // Update frontend state first
+    setUserInfo((prev) => ({
+      ...prev,
+      name: updatedData.name,
+      phone: updatedData.phone,
+      email: updatedData.email,
+      avatar: newPhoto,
+      profile_photo: newPhoto
+    }));
 
     const response = await fetch(`http://localhost:5000/api/user-node/update/${userInfo.id}`, {
       method: 'PUT',

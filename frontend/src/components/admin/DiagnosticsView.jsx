@@ -1,100 +1,74 @@
-// src/components/admin/DiagnosticsView.jsx
-import React, { useState } from 'react';
-import { Download } from 'lucide-react'; // <-- CRITICAL: Make sure this is here!
+import React, { useState, useEffect, useCallback } from 'react';
+import { ArrowUpCircle, ArrowDownCircle, Wallet, CheckCircle } from 'lucide-react';
+import io from 'socket.io-client';
 
-export default function DiagnosticsView({ theme, isDarkMode, feeRate, transactions }) {
-  const [startDate, setStartDate] = useState('2026-06-01');
-  const [endDate, setEndDate] = useState('2026-06-24');
+// Connect to your backend
+const socket = io('http://localhost:5000');
 
-  // Safety fallback: If transactions array hasn't loaded yet, prevent crash
-  const pendingOrdersCount = transactions ? transactions.filter(t => t.status === 'Pending').length : 0;
+export default function DiagnosticsView({ theme, isDarkMode }) {
+  const [dashboardData, setDashboardData] = useState({
+    totalIn: 0,
+    totalOut: 0,
+    netProfit: 0,
+    totalOrders: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  // Function to fetch the processed data from the COBOL-powered API
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/dashboard/diagnostics');
+      const data = await response.json();
+      
+      if (data.success) {
+        setDashboardData(data.today);
+      }
+    } catch (err) {
+      console.error("Error fetching COBOL-processed data:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Listen for socket events to refresh when an admin approves a transaction
+  useEffect(() => {
+    fetchDashboardData();
+    socket.on('refreshDashboard', fetchDashboardData);
+    return () => socket.off('refreshDashboard');
+  }, [fetchDashboardData]);
+
+  if (loading) return <div className="p-10 text-center text-slate-400">Processing with COBOL Engine...</div>;
 
   return (
     <div className="space-y-6">
-      {/* View Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="flex justify-between items-end">
         <div>
-          <h2 className={`text-xl font-extrabold tracking-tight uppercase ${theme.textTitle}`}>Platform Diagnostics</h2>
-          <p className={`text-xs mt-1 ${theme.textMuted}`}>Real-time revenue clearance and ledger nodes evaluation</p>
-        </div>
-        
-        <div className={`flex flex-wrap items-center gap-2 p-2 rounded-xl border ${theme.card}`}>
-          <input 
-            type="date" 
-            value={startDate} 
-            onChange={(e) => setStartDate(e.target.value)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none ${theme.input}`} 
-          />
-          <span className="text-slate-400 text-xs font-bold">To</span>
-          <input 
-            type="date" 
-            value={endDate} 
-            onChange={(e) => setEndDate(e.target.value)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none ${theme.input}`} 
-          />
-          <button className="bg-amber-500 hover:bg-amber-600 px-4 py-1.5 rounded-lg text-xs font-bold text-slate-950 transition-colors">
-            Filter
-          </button>
+          <h2 className="text-2xl font-black text-white uppercase tracking-tight">Platform Diagnostics</h2>
+          <p className="text-xs text-slate-400">Real-time calculations via COBOL Engine</p>
         </div>
       </div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className={`border p-5 rounded-2xl ${theme.card}`}>
-          <p className={`text-[10px] font-extrabold uppercase tracking-widest ${theme.textMuted}`}>Today's Total In</p>
-          <p className={`text-2xl font-black mt-1.5 ${theme.textTitle}`}>3,450,000 <span className="text-xs font-medium text-slate-400">MMK</span></p>
-        </div>
-
-        <div className={`border p-5 rounded-2xl ${theme.card}`}>
-          <p className={`text-[10px] font-extrabold uppercase tracking-widest ${theme.textMuted}`}>Total Paid Out</p>
-          <p className={`text-2xl font-black mt-1.5 ${theme.textTitle}`}>3,381,000 <span className="text-xs font-medium text-slate-400">MMK</span></p>
-        </div>
-
-        <div className={`border bg-emerald-500/5 p-5 rounded-2xl ${isDarkMode ? 'border-emerald-500/20' : 'border-emerald-200'}`}>
-          <p className="text-[10px] font-extrabold uppercase text-emerald-600 tracking-widest">Net Profit ({feeRate}%)</p>
-          <p className="text-2xl font-black text-emerald-600 mt-1.5">+69,000 <span className="text-xs font-medium text-emerald-600/70">MMK</span></p>
-        </div>
-
-        <div className={`border p-5 rounded-2xl ${theme.card}`}>
-          <p className="text-[10px] font-extrabold uppercase text-amber-500 tracking-widest">Pending Verification</p>
-          <p className="text-2xl font-black text-amber-500 mt-1.5">
-            {pendingOrdersCount} <span className="text-xs font-medium text-slate-400">Orders</span>
-          </p>
-        </div>
+      {/* The 4 Core Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard title="Today's Cash In" value={dashboardData.totalIn} color="text-sky-400" icon={<ArrowUpCircle size={20}/>} />
+        <MetricCard title="Today's Cash Out" value={dashboardData.totalOut} color="text-rose-400" icon={<ArrowDownCircle size={20}/>} />
+        <MetricCard title="Net Profit" value={dashboardData.netProfit} color="text-emerald-400" icon={<Wallet size={20}/>} />
+        <MetricCard title="Approved Orders" value={dashboardData.totalOrders} color="text-amber-400" icon={<CheckCircle size={20}/>} />
       </div>
+    </div>
+  );
+}
 
-      {/* Settlement Records Table */}
-      <div className={`border rounded-2xl overflow-hidden ${theme.tableBg}`}>
-        <div className={`p-5 border-b flex flex-col sm:flex-row gap-3 justify-between sm:items-center ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-          <h3 className={`text-sm font-bold uppercase tracking-wider ${theme.textTitle}`}>Settlement Records</h3>
-          <button className={`border rounded-xl px-4 py-2 text-xs font-bold flex items-center justify-center gap-2 ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}>
-            <Download size={14} className="text-amber-500" /> Export to Excel
-          </button>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse min-w-[600px]">
-            <thead>
-              <tr className={`font-extrabold border-b uppercase tracking-wider ${theme.th}`}>
-                <th className="p-4">Settlement Date</th>
-                <th className="p-4 text-center">Total Orders</th>
-                <th className="p-4">Total Cash In (MMK)</th>
-                <th className="p-4">Total Outflow (MMK)</th>
-                <th className="p-4 text-emerald-600">Profit Generated</th>
-              </tr>
-            </thead>
-            <tbody className={`divide-y font-medium ${isDarkMode ? 'divide-slate-800/60' : 'divide-slate-200'}`}>
-              <tr className={isDarkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}>
-                <td className={`p-4 font-mono font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Jun 24, 2026</td>
-                <td className={`p-4 text-center font-bold ${theme.textTitle}`}>42</td>
-                <td className="p-4">3,450,000</td>
-                <td className="p-4">3,381,000</td>
-                <td className="p-4 text-emerald-600 font-bold">+69,000</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+function MetricCard({ title, value, color, icon }) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl hover:border-slate-700 transition-colors">
+      <div className="flex justify-between items-start mb-3">
+        <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">{title}</p>
+        <span className={color}>{icon}</span>
       </div>
+      <p className={`text-2xl font-black ${color}`}>
+        {Number(value || 0).toLocaleString()}
+      </p>
     </div>
   );
 }
