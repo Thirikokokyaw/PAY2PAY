@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { UserMinus, PlusCircle, RefreshCw, Loader2 } from 'lucide-react';
+import Swal from 'sweetalert2';
+
 
 export default function AdminManagementView({ theme, isDarkMode = false }) {
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [newAdmin, setNewAdmin] = useState({ name: '', email: '', phone: '', password: '', role: 'admin' });
+  const [errors, setErrors] = useState({ email: '', phone: '', password: '' });
 
   // Database Function
   const fetchAdmins = useCallback(async (showLoading = true) => {
@@ -35,64 +38,124 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
 
   // Add  Table မှာ 
   const handleCreateAdmin = async (e) => {
-    e.preventDefault();
-    if (!newAdmin.name || !newAdmin.email || !newAdmin.phone || !newAdmin.password) return;
-    
-    try {
-      const response = await fetch('http://localhost:5000/api/admins', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newAdmin)
-      });
+  e.preventDefault();
+  
+  let currentErrors = { email: '', phone: '', password: '' };
+  let hasError = false;
 
-      if (response.ok) {
-        const createdAdmin = await response.json();
-        
-        // Live Update
-        setAdmins(prev => [createdAdmin, ...prev]);
-        
-        setNewAdmin({ name: '', email: '', phone: '', password: '', role: 'admin' });
+  if (!newAdmin.name || !newAdmin.email || !newAdmin.phone || !newAdmin.password) return;
+
+  if (newAdmin.password.length < 8) {
+    currentErrors.password = 'Password must be at least 8 characters long.';
+    hasError = true;
+  }
+
+  const emailExists = admins.some(admin => admin.email.toLowerCase() === newAdmin.email.toLowerCase());
+  const phoneExists = admins.some(admin => admin.phone === newAdmin.phone);
+
+  if (emailExists) {
+    currentErrors.email = 'This email address is already registered.';
+    hasError = true;
+  }
+
+  if (phoneExists) {
+    currentErrors.phone = 'This phone number is already registered.';
+    hasError = true;
+  }
+
+  if (hasError) {
+    setErrors(currentErrors);
+    return;
+  }
+  
+  try {
+    const response = await fetch('http://localhost:5000/api/admins', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newAdmin)
+    });
+
+    const resData = await response.json();
+
+    if (response.ok) {
+      setAdmins(prev => [resData, ...prev]);
+      setNewAdmin({ name: '', email: '', phone: '', password: '', role: 'admin' });
+      setErrors({ email: '', phone: '', password: '' }); // Clear errors
+    } else {
+      if (resData.message && resData.message.toLowerCase().includes('email')) {
+        setErrors(prev => ({ ...prev, email: 'This email is already taken.' }));
+      } else if (resData.message && resData.message.toLowerCase().includes('phone')) {
+        setErrors(prev => ({ ...prev, phone: 'This phone number is already taken.' }));
       }
-    } catch (error) {
-      console.error("Error creating admin:", error);
     }
-  };
+  } catch (error) {
+    console.error("Error creating admin:", error);
+  }
+};
 
   // Revoke
-  const handleRevokeAdmin = async (id) => {
+  const handleRevokeAdmin = async (id, name, currentStatus) => {
+    const isRevoked = currentStatus === 'Revoked';
+
+    const result = await Swal.fire({
+      html: `
+        <div class="flex flex-col items-center">            
+          <h2 class="text-sm font-bold m-0 mb-5 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}">
+            ${isRevoked ? 'Activate Access?' : 'Revoke Access?'}
+          </h2>             
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonColor: isRevoked ? '#10b981' : '#ef4444', 
+      cancelButtonColor: '#64748b', 
+      confirmButtonText: isRevoked ? 'Activate' : 'Revoke',
+      cancelButtonText: 'Cancel',
+      reverseButtons: true,
+      width: '260px',
+      customClass: {
+        popup: `!p-4 !rounded-xl !h-auto ${isDarkMode ? '!bg-slate-800 !text-slate-200' : '!bg-white !text-slate-800'}`,
+        actions: '!mt-0 !mb-0 !gap-2',
+        confirmButton: '!text-[11px] !px-3 !py-1.5 !m-0 !rounded-lg !font-semibold',
+        cancelButton: '!text-[11px] !px-3 !py-1.5 !m-0 !rounded-lg !font-semibold'
+      }
+    });
+
+    if (!result.isConfirmed) return; 
+
     try {
-      const response = await fetch(`http://localhost:5000/api/admins/revoke/${id}`, {
-        method: 'PATCH'
-      });
+     const response = await fetch(`http://localhost:5000/api/admins/revoke/${id}`, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    status: isRevoked ? 'Active' : 'Revoked',
+    isBlacklisted: isRevoked ? 0 : 1
+  })
+});
 
       if (response.ok) {
         setAdmins(prev => prev.map(admin => {
           if (admin.id === id) {
-            return { ...admin, status: 'Revoked', isBlacklisted: 1 };
+            return isRevoked 
+              ? { ...admin, status: 'Active', isBlacklisted: 0 }
+              : { ...admin, status: 'Revoked', isBlacklisted: 1 };
           }
           return admin;
         }));
       }
     } catch (error) {
-      console.error("Error revoking admin:", error);
+      console.error("Error updating admin access:", error);
     }
   };
+
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className={`text-xl font-extrabold tracking-tight uppercase ${theme.textTitle}`}>Administrative Security Node</h2>
-          <p className={`text-xs mt-1 ${theme.textMuted}`}>Provision access tokens and handle internal operations hierarchy roles</p>
+          <h2 className={`text-xl font-extrabold tracking-tight uppercase ${theme.textTitle}`}>Administrator Security & Roles</h2>
+          <p className={`text-xs mt-1 ${theme.textMuted}`}>Control internal personnel access, assign roles, and toggle operational status routing.</p>
         </div>
-        {/* Refresh Button */}
-        <button 
-          onClick={handleRefresh}
-          disabled={loading || isRefreshing}
-          className={`p-2 rounded-xl border transition-all flex items-center justify-center ${theme.input} hover:opacity-80`}
-        >
-          <RefreshCw size={16} className={`${isRefreshing ? 'animate-spin' : ''}`} />
-        </button>
+        
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -102,24 +165,33 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
           </h3>
           <div>
             <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Full Name</label>
-            <input required type="text" placeholder="Mg Mg" value={newAdmin.name} onChange={e=>setNewAdmin({...newAdmin, name: e.target.value})} className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none ${theme.input}`} />
+            <input required type="text" placeholder="Mg Mg" value={newAdmin.name} onChange={e=>setNewAdmin({...newAdmin, name: e.target.value})} className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none border border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 ${theme.input}`} />
+
           </div>
-          <div>
-            <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Email Link Address</label>
-            <input required type="email" placeholder="operator@pay2pay.com" value={newAdmin.email} onChange={e=>setNewAdmin({...newAdmin, email: e.target.value})} className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none ${theme.input}`} />
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Phone Index</label>
-            <input required type="text" placeholder="09xxxxxxxxx" value={newAdmin.phone} onChange={e=>setNewAdmin({...newAdmin, phone: e.target.value})} className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none ${theme.input}`} />
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Password Key</label>
-            <input required type="password" placeholder="Enter a strong password" value={newAdmin.password} onChange={e=>setNewAdmin({...newAdmin, password: e.target.value})} className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none ${theme.input}`} />
-          </div>
+          
+        <div>
+          <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Email Link Address</label>
+          <input required type="email" placeholder="operator@pay2pay.com" value={newAdmin.email} onChange={e=>{setNewAdmin({...newAdmin, email: e.target.value}); setErrors(p=>({...p, email:''}))}} className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none border ${errors.email ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500' : 'border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500'} ${theme.input}`} />
+          {errors.email && <p className="text-[10px] text-rose-500 font-semibold mt-1 pl-1">{errors.email}</p>}
+        </div>
+
+        <div>
+          <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Phone Index</label>
+          <input required type="text" placeholder="09xxxxxxxxx" value={newAdmin.phone} onChange={e=>{setNewAdmin({...newAdmin, phone: e.target.value}); setErrors(p=>({...p, phone:''}))}} className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none border ${errors.phone ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500' : 'border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500'} ${theme.input}`} />
+          {errors.phone && <p className="text-[10px] text-rose-500 font-semibold mt-1 pl-1">{errors.phone}</p>}
+        </div>
+
+        <div>
+        <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Password Key</label>
+        <input required type="password" placeholder="Enter a strong password" value={newAdmin.password} onChange={e=>{setNewAdmin({...newAdmin, password: e.target.value}); setErrors(p=>({...p, password:''}))}} className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none border ${errors.password ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500' : 'border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500'} ${theme.input}`} />
+        {errors.password && <p className="text-[10px] text-rose-500 font-semibold mt-1 pl-1">{errors.password}</p>}
+      </div>
+
           <div>
             <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Authority Role Node</label>
             <input type="text" value="admin" disabled className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none font-semibold bg-slate-100 dark:bg-slate-800 opacity-60 cursor-not-allowed ${theme.input}`} />
           </div>
+
           <button type="submit" className="w-full py-3 bg-amber-500 hover:bg-amber-600 rounded-xl text-xs font-black uppercase tracking-wider text-slate-950 transition-all shadow-lg shadow-amber-500/15">
             Create Admin Account
           </button>
@@ -167,17 +239,21 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
                         </td>
                         <td className="p-4 text-right">
                           <button
-                            onClick={() => handleRevokeAdmin(admin.id)}
-                            type="button"
-                            disabled={isSuperAdmin || isRevoked}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1 ml-auto transition-all ${
-                              isSuperAdmin || isRevoked
-                                ? 'opacity-30 cursor-not-allowed border-slate-200 text-slate-400' 
+                          onClick={() => handleRevokeAdmin(admin.id, admin.name, admin.status)}
+                          type="button"
+                          disabled={isSuperAdmin}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1 ml-auto transition-all ${
+                            isSuperAdmin
+                              ? 'opacity-30 cursor-not-allowed border-slate-200 text-slate-400' 
+                              : isRevoked
+                                ? 'bg-emerald-500/10 hover:bg-emerald-600 border-emerald-500/20 text-emerald-500 hover:text-white'
                                 : 'bg-rose-500/10 hover:bg-rose-600 border-rose-500/20 text-rose-500 hover:text-white'
-                            }`}
-                          >
-                            <UserMinus size={13} /> {isRevoked ? 'Revoked' : 'Revoke'}
-                          </button>
+                          }`}
+                        >
+                          <UserMinus size={13} /> 
+                          {isRevoked ? 'Activate' : 'Revoke'}
+                        </button>
+
                         </td>
                       </tr>
                     );
