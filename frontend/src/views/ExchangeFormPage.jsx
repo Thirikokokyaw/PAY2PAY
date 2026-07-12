@@ -26,6 +26,12 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
   const [receiverName, setReceiverName] = useState('');
   const [lastSixDigits, setLastSixDigits] = useState('');
 
+  const [senderPhoneError, setSenderPhoneError] = useState('');
+  const [receiverPhoneError, setReceiverPhoneError] = useState('');
+  const [transactionIdError, setTransactionIdError] = useState('');
+  const [amountError, setAmountError] = useState('');
+  const [gatewayError, setGatewayError] = useState('');
+
   // SECURITY LAYER: Route Access Protection
   useEffect(() => {
     if (!isLoggedIn) {
@@ -51,7 +57,7 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
         }
 
         if (userData.status === 'Blocked') {
-          alert("Account Suspended: This profile is temporarily frozen.");
+         
           if (typeof setUserInfo === 'function') {
             setUserInfo(prev => ({ ...prev, status: 'Blocked' }));
           }
@@ -157,13 +163,14 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
   // STEP 1 VALIDATION
   const handleWalletSubmit = (e) => {
     e.preventDefault();
+
+    setGatewayError('');
     
     if (fromWallet === toWallet) {
-      alert("Error: Source gateway and destination gateway cannot be identical.");
+      setGatewayError("Error: Source gateway and destination gateway cannot be identical.");
       return;
     }
 
-    
     if (selectedToWalletDetails && selectedToWalletDetails.is_active === 'N') {
       alert(`Operation Denied: The destination network service (${selectedToWalletDetails.wallet_name}) is currently suspended.`);
       return;
@@ -171,12 +178,12 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
 
     const availableReserve = selectedToWalletDetails?.current_balance ?? 0;
     if (transferAmount > availableReserve) {
-      alert(`Balance Error: Cannot exchange more than the available reserve. Maximum allowed for this wallet is ${availableReserve.toLocaleString()} MMK.`);
+      setAmountError(`Balance Error: Cannot exchange more than the available reserve. Maximum allowed for this wallet is ${availableReserve.toLocaleString()} MMK.`);
       return;
     }
 
     if (transferAmount < 1000 || transferAmount > 500000) {
-      alert("Threshold Error: Allowed transfer range is 1,000 MMK to 500,000 MMK only.");
+      setAmountError("Threshold Error: Allowed transfer range is 1,000 MMK to 500,000 MMK only.");
       return;
     }
 
@@ -187,13 +194,29 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
   const handleExchangeSubmit = async (e) => {
     e.preventDefault();
     
+    setSenderPhoneError('');
+    setReceiverPhoneError('');
+    setTransactionIdError('');
+
     const phoneRegex = /^\d{10,11}$/;
-    if (!phoneRegex.test(senderPhone) || !phoneRegex.test(receiverPhone)) {
-      alert("Phone Number must be exactly 10 or 11 digits.");
-      return;
+    let hasValidationError = false;
+
+    if (!phoneRegex.test(senderPhone)) {
+      setSenderPhoneError("Sender phone number must be exactly 10 or 11 digits.");
+      hasValidationError = true;
     }
+
+    if (!phoneRegex.test(receiverPhone)) {
+      setReceiverPhoneError("Receiver phone number must be exactly 10 or 11 digits.");
+      hasValidationError = true;
+    }
+
     if (lastSixDigits.length !== 6 || isNaN(lastSixDigits)) {
-      alert("Verification Failed: Please input exactly the final 6 numerical characters.");
+      setTransactionIdError("Verification Failed: Please input exactly the final 6 numerical characters.");
+      hasValidationError = true;
+    }
+
+    if (hasValidationError) {
       return;
     }
 
@@ -241,7 +264,7 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
   }
 
   return (
-    <div className={`max-w-md mx-auto border rounded-3xl p-6 transition-all duration-300 ${bgCard}`}>
+    <div className={`w-[448px] max-w-full mx-auto border rounded-3xl p-6 transition-all duration-300 ${bgCard}`}>
       
       {/* Header Process Progress Tracker */}
       <div className={`flex items-center justify-between mb-6 border-b border-dashed pb-4 ${darkMode ? 'border-amber-500/10' : 'border-amber-500/20'}`}>
@@ -283,13 +306,15 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
               <select 
                 id="fromWalletSelect"
                 value={fromWallet} 
-                onChange={(e) => setFromWallet(e.target.value)}
+                onChange={(e) => {
+                  setFromWallet(e.target.value);
+                  setGatewayError(''); 
+                }}
                 className={`w-full border rounded-xl px-2.5 py-3 text-xs focus:outline-none font-bold transition-all ${bgInput}`}
               >
                 {wallets.map((w) => (
-                 
                   <option key={w.wallet_id} value={w.wallet_id} className={darkMode ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>
-                    {w.wallet_name} {w.is_active !== 'Y' ? '' : ''}
+                    {w.wallet_name}
                   </option>
                 ))}
               </select>
@@ -300,17 +325,24 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
               <select 
                 id="toWalletSelect"
                 value={toWallet} 
-                onChange={(e) => setToWallet(e.target.value)}
+                onChange={(e) => {
+                  setToWallet(e.target.value);
+                  setGatewayError(''); 
+                }}
                 className={`w-full border rounded-xl px-2.5 py-3 text-xs focus:outline-none font-bold transition-all ${bgInput}`}
               >
                 {wallets.map((w) => (
                   <option key={w.wallet_id} value={w.wallet_id} disabled={w.is_active !== 'Y'} className={darkMode ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>
-                    {w.wallet_name} {w.is_active !== 'Y' ? '(Disabled)' : ''}
+                    {w.wallet_name}
                   </option>
                 ))}
               </select>
             </div>
           </div>
+        
+          {gatewayError && (
+            <p className="text-rose-500 text-[10px] font-semibold mt-1">{gatewayError}</p>
+          )}
 
           <div className={`p-2.5 rounded-xl border text-[11px] font-bold flex justify-between items-center ${darkMode ? 'bg-black/30 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
             <span className={textMuted}>To Reserve Balance:</span>
@@ -327,9 +359,15 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
               required 
               placeholder="Min: 1,000 - Max: 500,000" 
               value={amount} 
-              onChange={(e) => setAmount(e.target.value)} 
+              onChange={(e) => {
+                setAmount(e.target.value);
+                setAmountError(''); 
+              }} 
               className={`w-full border rounded-xl px-3.5 py-3 text-xs focus:outline-none font-bold transition-all ${bgInput}`} 
             />
+            {amountError && (
+              <p className="text-rose-500 text-[10px] font-semibold mt-1">{amountError}</p>
+            )}
           </div>
 
           <button type="submit" className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-md uppercase tracking-widest transition-all">
@@ -340,7 +378,7 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
 
       {/* STEP 2: GATEWAY DEPOSIT */}
       {step === 2 && (
-        <div className="space-y-4 text-center">
+  <div className="space-y-4 text-center">
           <div className={`p-5 border rounded-2xl ${bgInner} flex flex-col items-center`}>
             {/* <span className={`text-[9px] font-black uppercase tracking-widest mb-2.5 flex items-center gap-1 border px-2 py-0.5 rounded-full ${darkMode ? 'text-amber-300 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-50 border-amber-200'}`}>
               <CheckCircle size={10} /> Secure Vault Active
@@ -398,7 +436,7 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
 
       {/* STEP 3: TRANSACTION METADATA COLLECTION */}
       {step === 3 && (
-        <form onSubmit={handleExchangeSubmit} className="space-y-4">
+  <form onSubmit={handleExchangeSubmit} className="space-y-4">
           <div className={`p-3.5 rounded-2xl border ${bgInner} space-y-2.5`}>
             <div className={`flex items-center justify-between text-xs border-b pb-2 ${darkMode ? 'border-amber-500/10' : 'border-amber-500/20'}`}>
               <span className={`font-bold flex items-center gap-1.5 ${darkMode ? 'text-amber-100' : 'text-slate-800'}`}>
@@ -429,7 +467,21 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
               </div>
               <div>
                 <label htmlFor="senderPhone" className={`block text-[10px] font-bold mb-1 ${textMuted}`}>Sender Phone Number</label>
-                <input id="senderPhone" type="tel" required placeholder="0912345678" value={senderPhone} onChange={(e) => setSenderPhone(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none font-mono transition-all ${bgInput}`} />
+                <input 
+                  id="senderPhone" 
+                  type="tel" 
+                  required 
+                  placeholder="0912345678" 
+                  value={senderPhone} 
+                  onChange={(e) => {
+                    setSenderPhone(e.target.value);
+                    setSenderPhoneError(''); 
+                  }} 
+                  className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none font-mono transition-all ${bgInput}`} 
+                />
+                {senderPhoneError && (
+                  <p className="text-rose-500 text-[10px] font-semibold mt-1">{senderPhoneError}</p>
+                )}
               </div>
             </div>
 
@@ -441,7 +493,21 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
               </div>
               <div>
                 <label htmlFor="receiverPhone" className={`block text-[10px] font-bold mb-1 ${textMuted}`}>Target Phone Number</label>
-                <input id="receiverPhone" type="tel" required placeholder="0912345678" value={receiverPhone} onChange={(e) => setReceiverPhone(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none font-mono transition-all ${bgInput}`} />
+                <input 
+                  id="receiverPhone" 
+                  type="tel" 
+                  required 
+                  placeholder="0912345678" 
+                  value={receiverPhone} 
+                  onChange={(e) => {
+                    setReceiverPhone(e.target.value);
+                    setReceiverPhoneError(''); 
+                  }} 
+                  className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none font-mono transition-all ${bgInput}`} 
+                />
+                {receiverPhoneError && (
+                  <p className="text-rose-500 text-[10px] font-semibold mt-1">{receiverPhoneError}</p>
+                )}
               </div>
             </div>
 
@@ -449,7 +515,22 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
               <label htmlFor="lastSixDigits" className={`block text-[10px] font-black uppercase mb-1.5 tracking-widest flex items-center gap-1 ${darkMode ? 'text-amber-300' : 'text-amber-700'}`}>
                 <AlertCircle size={11} /> Last 6 Digits of Transaction ID
               </label>
-              <input id="lastSixDigits" type="text" maxLength={6} required placeholder="e.g. 543210" value={lastSixDigits} onChange={(e) => setLastSixDigits(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none font-mono font-black tracking-widest text-center transition-all ${darkMode ? 'border-amber-500/30' : 'border-amber-500/50'} ${bgInput}`} />
+              <input 
+                id="lastSixDigits" 
+                type="text" 
+                maxLength={6} 
+                required 
+                placeholder="e.g. 543210" 
+                value={lastSixDigits} 
+                onChange={(e) => {
+                  setLastSixDigits(e.target.value);
+                  setTransactionIdError('');
+                }} 
+                className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none font-mono font-black tracking-widest text-center transition-all ${darkMode ? 'border-amber-500/30' : 'border-amber-500/50'} ${bgInput}`} 
+              />
+              {transactionIdError && (
+                <p className="text-rose-500 text-[10px] font-semibold mt-1 text-center">{transactionIdError}</p>
+              )}
             </div>
           </div>
 
