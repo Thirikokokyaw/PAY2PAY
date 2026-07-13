@@ -10,7 +10,8 @@ const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const util = require('util');
-const execPromise = util.promisify(exec);
+// const execPromise = util.promisify(exec);
+const execPromise = require('util').promisify(require('child_process').exec);
 
 const app = express();
 const server = http.createServer(app); 
@@ -400,6 +401,129 @@ app.post('/api/exchange/submit', async (req, res) => {
         if (connection) connection.release();
     }
 });
+
+// app.post('/api/exchange/submit', async (req, res) => {
+//     console.log("=== Received Exchange Request ===", req.body);
+    
+//     let connection;
+//     try {
+//         const {
+//             fromWallet, toWallet, amount, txnIdTail, 
+//             senderPhone, receiverPhone, senderName, receiverName, userId
+//         } = req.body;
+
+//         if (!fromWallet || !toWallet || !amount || !txnIdTail || !senderPhone || !receiverPhone) {
+//             return res.status(400).json({ success: false, message: 'Required fields are missing.' });
+//         }
+
+//         connection = await db.promise().getConnection();
+//         await connection.beginTransaction();
+
+//         // 1. Wallets 
+//         const [wallets] = await connection.query(
+//             'SELECT wallet_id, current_balance FROM wallets WHERE wallet_id IN (?, ?)',
+//             [fromWallet, toWallet]
+//         );
+
+//         const sourceWallet = wallets.find(w => w.wallet_id === fromWallet);
+//         if (!sourceWallet) {
+//             await connection.rollback();
+//             return res.status(400).json({ success: false, message: 'Source wallet not found.' });
+//         }
+
+//         // 2. Fees 
+//         const [rateRows] = await connection.query('SELECT fee_rate FROM rates WHERE id = 1');
+//         let currentFeeRate = rateRows.length > 0 ? parseInt(rateRows[0].fee_rate, 10) : 2;
+//         const numericAmount = parseInt(amount, 10);
+//         const netReceiveAmount = Math.round(numericAmount - (numericAmount * (currentFeeRate / 100)));
+
+//         // 3. COBOL Validation
+//         const cobolArgs = `VALIDATE_TXN,${numericAmount},${sourceWallet.current_balance},${txnIdTail},${senderPhone},${receiverPhone}`;
+//         const { exec } = require('child_process');
+        
+//         const runCobolValidator = () => new Promise((resolve) => {
+//             exec(`exchangeform.exe "${cobolArgs}"`, (err, stdout) => {
+//                 if (err || !stdout.trim().startsWith("SUCCESS")) resolve({ valid: false });
+//                 else resolve({ valid: true });
+//             });
+//         });
+
+//         const cobolResult = await runCobolValidator();
+//         if (!cobolResult.valid) {
+//             await connection.rollback();
+//             return res.status(400).json({ success: false, message: "Validation Failed" });
+//         }
+
+//         // 4. Transaction Record 
+//         const insertTxnSql = `INSERT INTO exchange_transactions 
+//             (user_id, from_wallet, to_wallet, send_amount, receive_amount, txn_id_tail, sender_name, sender_phone, receiver_name, receiver_phone, status) 
+//             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '0')`;
+        
+//         const [result] = await connection.query(insertTxnSql, [
+//             userId || 1, fromWallet, toWallet, numericAmount, netReceiveAmount, 
+//             txnIdTail, senderName || '', senderPhone, receiverName || '', receiverPhone
+//         ]);
+        
+//         // ─── From Wallet (ADD)  ───
+//         await connection.query(
+//             'UPDATE wallets SET current_balance = current_balance + ? WHERE wallet_id = ?',
+//             [numericAmount, fromWallet]
+//         );
+        
+//         const txnIdForApproval = result.insertId;
+//         await connection.commit();
+//         connection.release();
+
+//         // 5. 5s Auto-Approve Section (To Wallet)
+//         setTimeout(async () => {
+//             let autoConn;
+//             try {
+//                 autoConn = await db.promise().getConnection();
+                
+//                 const [targetWallets] = await autoConn.query('SELECT current_balance FROM wallets WHERE wallet_id = ?', [toWallet]);
+//                 if (targetWallets.length === 0) return;
+
+//                 const currentTgtBal = parseInt(targetWallets[0].current_balance, 10) || 0;
+                
+//                 // COBOL SUBTRACT Args (APPROVE command)
+//                 const settlementArgs = `APPROVE,0,${netReceiveAmount},0,${currentTgtBal}`;
+
+//                 exec(`settlement.exe "${settlementArgs}"`, async (err, stdout) => {
+//                     if (!err && stdout.trim().startsWith("SUCCESS")) {
+//                         const parts = stdout.trim().split('|');
+//                         const newTgtBal = parseInt(parts[2], 10);
+
+//                         // To Wallet Update 
+//                         await autoConn.query('UPDATE wallets SET current_balance = ? WHERE wallet_id = ?', [newTgtBal, toWallet]);
+                        
+//                         // Transaction Status '1' (Approved) 
+//                         await autoConn.query('UPDATE exchange_transactions SET status = "1" WHERE txn_id = ?', [txnIdForApproval]);
+                        
+//                         console.log(`Auto-approved: To Wallet ${toWallet} reduced to ${newTgtBal}`);
+//                     }
+//                     autoConn.release();
+//                 });
+//             } catch (e) {
+//                 console.error("Auto-Approve Error:", e);
+//                 if (autoConn) autoConn.release();
+//             }
+//         }, 5000);
+
+//         res.json({ 
+//             success: true, 
+//             message: 'Exchange request submitted successfully.',
+//             netReceiveAmount: netReceiveAmount
+//         });
+
+//     } catch (error) {
+//         if (connection) {
+//             await connection.rollback();
+//             connection.release();
+//         }
+//         console.error('Exchange Submit Error:', error);
+//         res.status(500).json({ success: false, message: 'Internal Server Error.' });
+//     }
+// });
 
 //USER REGISTER 
 app.post('/api/register', async (req, res) => {

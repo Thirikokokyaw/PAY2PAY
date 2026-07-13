@@ -226,42 +226,7 @@ useEffect(() => {
     }
   };
 
-  // Support Ticket Form Submit Handler
-  /*const handleSupportSubmit = (e) => {
-    e.preventDefault();
-    const newTicket = {
-      id: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
-      status: "Pending Review",
-      route: `${fromPay} ➔ ${toPay}`,
-      txn: supportTxnNo,
-      userMsg: supportMessage,
-      sysReply: "Awaiting customer support response..."
-    };
-    setSupportTickets([newTicket, ...supportTickets]);
-    setSupportTxnNo('');
-    setSupportMessage('');
-    alert("Support Ticket submitted to helpdesk system successfully.");
-  };
 
-  const downloadVoucherHandle = async () => {
-    if (!voucherRef.current) return;
-    try {
-      const canvas = await html2canvas(voucherRef.current, {
-        useCORS: true,
-        scale: 2,
-        backgroundColor: "#0f172a", 
-        logging: false
-      });
-      const image = canvas.toDataURL("image/png");
-      const link = document.createElement("a");
-      link.href = image;
-      link.download = `Voucher-TXN${selectedTxn?.txn_id}.png`;
-      link.click();
-    } catch (error) {
-      console.error("Voucher download error:", error);
-      alert("Voucher download error!!!");
-    }
-  };*/
   //modified code
   const handleSupportSubmit = async (e) => {
   e.preventDefault();
