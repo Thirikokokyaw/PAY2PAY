@@ -1,70 +1,217 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { ArrowUpCircle, ArrowDownCircle, Wallet, CheckCircle } from 'lucide-react';
-import io from 'socket.io-client';
+import React, { useState, useEffect } from 'react';
+import { ShieldAlert, Terminal, Clock, User, Globe, Search } from 'lucide-react';
 
-const socket = io('http://localhost:5000');
+export default function AuditLogsView({ theme, isDarkMode }) {
+  const [logs, setLogs] = useState([]);
+  const [filteredLogs, setFilteredLogs] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
-export default function DiagnosticsView({ theme, isDarkMode }) {
-  const [dashboardData, setDashboardData] = useState({
-    totalIn: 0,
-    totalOut: 0,
-    netProfit: 0,
-    totalOrders: 0
-  });
-  const [loading, setLoading] = useState(true);
-
-  const fetchDashboardData = useCallback(async () => {
+  const fetchAuditLogs = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/dashboard/diagnostics');
+      const response = await fetch('http://localhost:5000/api/admin/audit-logs', {
+        credentials: 'include'
+      });
       const data = await response.json();
-      
       if (data.success) {
-        setDashboardData(data.today);
+        setLogs(data.logs);
       }
     } catch (err) {
-      console.error("Error fetching COBOL-processed data:", err);
-    } finally {
-      setLoading(false);
+      console.error("Error fetching audit logs:", err);
     }
-  }, []);
+  };
 
   useEffect(() => {
-    fetchDashboardData();
-    socket.on('refreshDashboard', fetchDashboardData);
-    return () => socket.off('refreshDashboard');
-  }, [fetchDashboardData]);
+    fetchAuditLogs();
+    const interval = setInterval(() => { fetchAuditLogs(); }, 3000); 
+    return () => clearInterval(interval);
+  }, []);
 
-  if (loading) return <div className={`p-10 text-center ${theme.textMuted}`}>Processing with COBOL Engine...</div>;
+  // Filter Area
+  useEffect(() => {
+    const filtered = logs.filter(log => {
+      let logData = {};
+     
+      if (log.message && typeof log.message === 'string') {
+        try {
+          logData = JSON.parse(log.message);
+        } catch (e) {
+          logData = { action: log.message };
+        }
+      } else {
+        logData = log.message || log;
+      }
+
+      const name = logData?.adminName || log?.adminName || 'System/Guest';
+      const email = logData?.adminEmail || log?.adminEmail || 'N/A';
+      const action = logData?.action || log?.action || '';
+
+      return (
+        name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        action.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        email.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    });
+    setFilteredLogs(filtered);
+  }, [searchTerm, logs]);
+
+  const getStatusColor = (status) => {
+    if (status >= 200 && status < 300) return isDarkMode ? 'text-emerald-400' : 'text-emerald-600';
+    return isDarkMode ? 'text-rose-400' : 'text-rose-600';
+  };
 
   return (
-    <div className="space-y-6 animate-fadeIn">
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className={`text-2xl font-black uppercase tracking-tight ${theme.textTitle}`}>Platform Diagnostics</h2>
-          <p className={`text-xs ${theme.textMuted}`}>Real-time calculations via COBOL Engine</p>
+    <div className="p-4 space-y-4 max-w-7xl mx-auto h-screen max-h-[calc(100vh-32px)] flex flex-col overflow-hidden">
+      
+      {/* Header section */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800 pb-3 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 bg-slate-900 border border-slate-800 rounded-lg text-slate-200">
+            <ShieldAlert className="w-4 h-4" />
+          </div>
+          <h1 className={`text-base font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+            Security Audit Logs Registry
+          </h1>
+        </div>
+
+        {/* Search */}
+        <div className="relative w-full sm:w-64">
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search credentials or actions..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className={`w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border outline-none transition-all ${
+              isDarkMode ? 'bg-slate-900/90 border-slate-800 text-white focus:border-slate-600' : 'bg-white border-slate-300 text-slate-900 focus:border-slate-500'
+            }`}
+          />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard title="Today's Cash In" value={dashboardData.totalIn} color="text-sky-400" icon={<ArrowUpCircle size={20}/>} theme={theme} />
-        <MetricCard title="Today's Cash Out" value={dashboardData.totalOut} color="text-rose-400" icon={<ArrowDownCircle size={20}/>} theme={theme} />
-        <MetricCard title="Net Profit" value={dashboardData.netProfit} color="text-emerald-400" icon={<Wallet size={20}/>} theme={theme} />
-        <MetricCard title="Approved Orders" value={dashboardData.totalOrders} color="text-amber-400" icon={<CheckCircle size={20}/>} theme={theme} />
-      </div>
-    </div>
-  );
+      {/* TABLE MAIN CONTAINER */}
+      <div className={`border rounded-xl flex flex-col flex-grow min-h-0 overflow-hidden ${
+        isDarkMode ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-white'
+      }`}>
+        
+        {/* Table Titles Header */}
+        <div className={`border-b text-[10px] font-bold tracking-wider uppercase flex-shrink-0 ${
+          isDarkMode ? 'bg-slate-900/60 border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-600'
+        }`}>
+          <table className="w-full text-left table-fixed">
+            <thead>
+              <tr>
+                <th className="py-2.5 px-4 w-[160px]"><div className="flex items-center gap-1"><Clock className="w-3 h-3" /> TIMESTAMP</div></th>
+                <th className="py-2.5 px-4 w-[180px]"><div className="flex items-center gap-1"><User className="w-3 h-3" /> ADMINISTRATOR</div></th>
+                <th className="py-2.5 px-4"><div className="flex items-center gap-1"><Terminal className="w-3 h-3" /> ACTION EXECUTION</div></th>
+                <th className="py-2.5 px-4 w-[80px] text-center">STATUS</th>
+                <th className="py-2.5 px-4 w-[130px] text-right"><div className="flex items-center gap-1 justify-end"><Globe className="w-3 h-3" /> IP ADDRESS</div></th>
+              </tr>
+            </thead>
+          </table>
+        </div>
+
+        {/* Scrollable Table Row Items */}
+        <div className="overflow-y-auto flex-grow min-h-0">
+          <table className="w-full text-left table-fixed border-collapse">
+            <tbody className={`divide-y text-xs ${isDarkMode ? 'divide-slate-800 text-slate-200' : 'divide-slate-200 text-slate-800'}`}>
+              {filteredLogs.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="text-center py-10 text-slate-500 italic tracking-wide">
+                    No matching records found inside the log database.
+                  </td>
+                </tr>
+              ) : (
+                filteredLogs.map((log, index) => {
+                  let logData = {};
+                  
+                  // Safe JSON String processing
+                  if (log.message && typeof log.message === 'string') {
+                    try { logData = JSON.parse(log.message); } catch (e) { logData = { action: log.message }; }
+                  } else {
+                    logData = log.message || log;
+                  }
+                  
+                  const logTimestamp = logData?.timestamp || log?.timestamp || 'N/A';
+                  const displayAdminName = logData?.adminName || log?.adminName || 'System/Guest';
+                  const displayAdminEmail = logData?.adminEmail || log?.adminEmail || 'N/A';
+                  let rawAction = logData?.action || log?.action || '';
+
+                
+                  let readableAction = rawAction;
+const cleanUrl = rawAction.toLowerCase();
+
+if (cleanUrl.includes('settings/update') || cleanUrl.includes('settings')) {
+  readableAction = "Updated General Settings";
+} else if (cleanUrl.includes('rate/update') || cleanUrl.includes('rate')) {
+  readableAction = "Updated Exchange Rates";
+} else if (cleanUrl.includes('add-admin')) {
+  readableAction = "Added New Admin Account";
+} else if (cleanUrl.includes('change-password')) {
+  readableAction = "Changed Admin Password";
+} else if (cleanUrl.includes('user-node/update')) {
+  const userId = cleanUrl.split('/').pop() || '';
+  readableAction = `Updated User Profile (ID: ${userId})`;
+} else if (cleanUrl.includes('audit-logs')) {
+  readableAction = "Viewed Security Audit Logs";
+} else if (cleanUrl.includes('users')) {
+  readableAction = "Viewed Users List";
+} else if (cleanUrl.includes('approved-transactions')) {
+  readableAction = "Viewed Approved Transactions";
+} else if (cleanUrl.includes('pending-transactions')) {
+  readableAction = "Viewed Pending Transactions";
+} else if (cleanUrl.includes('approve-transaction')) {
+  readableAction = "Approved Transaction";
+} else if (cleanUrl.includes('wallets/update-details')) {
+  readableAction = "Updated Wallet Details";
+} else if (cleanUrl.includes('tickets/reply')) {
+  readableAction = "Replied to Support Ticket";
+} else if (cleanUrl.includes('tickets/close')) {
+  readableAction = "Closed Support Ticket";
+} else if (cleanUrl.includes('login')) {
+  readableAction = "Logged Into System";
+} else if (cleanUrl.includes('logout')) {
+  readableAction = "Logged Out From System";
+} else if (cleanUrl.includes('delete-admin')) {
+  readableAction = "Deleted Admin Account";
+} else if (cleanUrl.includes('ban-user')) {
+  readableAction = "Banned User Account";
+} else if (cleanUrl.includes('deposit')) {
+  readableAction = "Processed Deposit Request";
+} else if (cleanUrl.includes('withdraw')) {
+  readableAction = "Processed Withdrawal Request";
+} else {
+ 
+  readableAction = rawAction.split('/').pop().replace(/-/g, ' ');
 }
 
-function MetricCard({ title, value, color, icon, theme }) {
-  return (
-    <div className={`border p-5 rounded-xl transition-colors ${theme.tableBg} ${isDarkMode ? 'border-slate-800 hover:border-slate-700' : 'border-slate-200 hover:border-slate-300'}`}>
-      <div className="flex justify-between items-start mb-3">
-        <p className={`text-[10px] uppercase tracking-wider font-bold ${theme.textMuted}`}>{title}</p>
-        <span className={color}>{icon}</span>
+                  return (
+                    <tr key={index} className={`transition-colors ${isDarkMode ? 'hover:bg-slate-900/40 text-slate-100' : 'hover:bg-slate-50 text-slate-900'}`}>
+                      <td className={`py-3 px-4 font-mono text-[11px] font-bold w-[160px] ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        {logTimestamp}
+                      </td>
+                      <td className="py-3 px-4 w-[180px] truncate">
+                        <div className="font-bold text-xs">{displayAdminName}</div>
+                        <div className="text-[10px] font-mono text-slate-500 mt-0.5">{displayAdminEmail}</div>
+                      </td>
+                      <td className="py-3 px-4 font-medium tracking-wide truncate">
+                        {readableAction}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-bold text-[11px] w-[80px]">
+  
+  <span className="text-emerald-500">✔</span>
+</td>
+                      <td className={`py-3 px-4 text-right font-mono text-[11px] w-[130px] ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                        {logData?.ip || log?.ip || '127.0.0.1'}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
       </div>
-      <p className={`text-2xl font-black ${theme.textTitle}`}>
-        {Number(value || 0).toLocaleString()}
-      </p>
     </div>
   );
 }

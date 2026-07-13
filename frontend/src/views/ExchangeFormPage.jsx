@@ -6,7 +6,7 @@ import {
 import { ThemeContext } from '../App.jsx';
 import '../App.css';
 
-export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, onRedirectToLogin = () => {} }) {
+export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, onRedirectToLogin = () => {}, paymentDetails }) {
   const { darkMode } = useContext(ThemeContext);
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
@@ -142,7 +142,7 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
   const textTitle = darkMode ? 'text-amber-200' : 'text-amber-600 font-black';
   const bgBadge = darkMode ? 'bg-amber-300 text-slate-950' : 'bg-amber-500 text-white';
 
-  const transferAmount = Number(amount) || 0;
+  const transferAmount = Number(String(amount).replace(/,/g, '')) || 0;
   // Dynamic Fee Calculation based on database feeRate
 const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 100)) : 0;
   // USER ACCOUNT BLOCKED STATEMENT
@@ -182,10 +182,11 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
       return;
     }
 
-    if (transferAmount < 1000 || transferAmount > 500000) {
-      setAmountError("Threshold Error: Allowed transfer range is 1,000 MMK to 500,000 MMK only.");
-      return;
-    }
+    const cleanAmount = Number(String(amount).replace(/,/g, ''));
+if (cleanAmount < 1000 || cleanAmount > 500000) {
+  setAmountError("Threshold Error: Allowed transfer range is 1,000 MMK to 500,000 MMK only.");
+  return;
+}
 
     setStep(2);
   };
@@ -229,7 +230,7 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
         body: JSON.stringify({
           fromWallet: fromWallet,
           toWallet: toWallet,
-          amount: Number(transferAmount),
+          amount: Number(String(amount).replace(/,/g, '')),
           txnIdTail: lastSixDigits,
           senderPhone: senderPhone,
           receiverPhone: receiverPhone,
@@ -352,23 +353,52 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
           </div>
 
           <div>
-            <label htmlFor="transferAmountInput" className={`block text-[10px] font-bold uppercase mb-1.5 tracking-widest ${darkMode ? 'text-amber-400/80' : 'text-amber-700'}`}>Transfer Amount (MMK)</label>
-            <input 
-              id="transferAmountInput"
-              type="number" 
-              required 
-              placeholder="Min: 1,000 - Max: 500,000" 
-              value={amount} 
-              onChange={(e) => {
-                setAmount(e.target.value);
-                setAmountError(''); 
-              }} 
-              className={`w-full border rounded-xl px-3.5 py-3 text-xs focus:outline-none font-bold transition-all ${bgInput}`} 
-            />
-            {amountError && (
-              <p className="text-rose-500 text-[10px] font-semibold mt-1">{amountError}</p>
-            )}
-          </div>
+  <label htmlFor="transferAmountInput" className={`block text-[10px] font-bold uppercase mb-1.5 tracking-widest ${darkMode ? 'text-amber-400/80' : 'text-amber-700'}`}>Transfer Amount (MMK)</label>
+  <input 
+    id="transferAmountInput"
+    type="text"
+    inputMode="numeric"
+    required 
+    placeholder="Min: 1,000 - Max: 500,000" 
+    value={amount} 
+    onChange={(e) => {
+      // Remove existing commas to get the raw number string
+      const rawVal = e.target.value.replace(/,/g, '');
+      
+      if (rawVal === '' || /^\d+$/.test(rawVal)) {
+        // Format with commas if there is a number
+        const formattedVal = rawVal !== '' ? Number(rawVal).toLocaleString('en-US') : '';
+        setAmount(formattedVal);
+        setAmountError(''); 
+      }
+    }}
+    onKeyDown={(e) => {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+        e.preventDefault();
+      }
+    }}
+    onMouseDown={(e) => {
+      e.preventDefault();
+      e.target.focus();
+      const length = e.target.value.length;
+      e.target.setSelectionRange(length, length);
+    }}
+    onTouchStart={(e) => {
+      e.preventDefault();
+      e.target.focus();
+      const length = e.target.value.length;
+      e.target.setSelectionRange(length, length);
+    }}
+    onSelect={(e) => {
+      const length = e.target.value.length;
+      e.target.setSelectionRange(length, length);
+    }}
+    className={`w-full border rounded-xl px-3.5 py-3 text-xs focus:outline-none font-bold transition-all ${bgInput}`} 
+  />
+  {amountError && (
+    <p className="text-rose-500 text-[10px] font-semibold mt-1">{amountError}</p>
+  )}
+</div>
 
           <button type="submit" className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-md uppercase tracking-widest transition-all">
             Proceed to Payment <ArrowRight size={14} />
@@ -387,20 +417,35 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
               Transmit funds to <span className="text-amber-500 font-bold">{selectedFromWalletDetails?.wallet_name}</span> 
             </p>
 
-            <div className={`w-36 h-36 p-2.5 rounded-xl shadow-lg border flex items-center justify-center relative my-1 ${darkMode ? 'bg-slate-950 border-amber-500/30' : 'bg-white border-amber-500/20'}`}>
-              {selectedFromWalletDetails?.qr_code_path ? (
-                <img 
-                  src={`http://localhost:5000/${selectedFromWalletDetails.qr_code_path}`} 
-                  alt="Wallet Gateway QR" 
-                  className="w-full h-full object-contain rounded-lg"
-                />
-              ) : (
-                <QrCode size={120} className={darkMode ? 'text-amber-300' : 'text-slate-900'} />
-              )}
-              <div className="absolute bottom-1 bg-amber-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded tracking-wide">
-                {fromWallet} CLEARING
-              </div>
-            </div>
+            <div className={`w-36 h-36 p-2.5 rounded-xl shadow-lg border flex items-center justify-center relative my-1 mb-6 ${darkMode ? 'bg-slate-950 border-amber-500/30' : 'bg-white border-amber-500/20'}`}>
+  
+  {selectedFromWalletDetails?.qr_code_path ? (
+    <img 
+      src={`http://localhost:5000/${selectedFromWalletDetails.qr_code_path}`} 
+      alt="Wallet Gateway QR" 
+      className="w-full h-full object-contain rounded-lg"
+      onError={(e) => {
+        e.target.onerror = null;
+        const fallbackKey = fromWallet === 'KBZPAY' ? 'KBZPay' : fromWallet === 'WAVEPAY' ? 'Wave Pay' : fromWallet;
+        e.target.src = paymentDetails?.[fallbackKey]?.qr || `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${selectedFromWalletDetails?.account_number || 'Pay2Pay'}`;
+      }}
+    />
+  ) : (
+
+    <img 
+      src={
+        paymentDetails?.[fromWallet === 'KBZPAY' ? 'KBZPay' : fromWallet === 'WAVEPAY' ? 'Wave Pay' : fromWallet]?.qr || 
+        `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${selectedFromWalletDetails?.account_number || 'Pay2Pay'}`
+      }
+      alt="Fallback Static QR"
+      className="w-full h-full object-contain rounded-lg"
+    />
+  )}
+
+  <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap bg-amber-500 text-white text-[9px] font-black px-2 py-0.5 rounded tracking-wide shadow-sm">
+  {fromWallet || 'P2P'} CLEARING
+</div>
+</div>
             
             <div className={`mt-4 text-left w-full space-y-1.5 p-3 border rounded-xl ${darkMode ? 'bg-black/30 border-slate-800' : 'bg-white border-slate-100'}`}>
               <div className="flex justify-between text-[11px]">
