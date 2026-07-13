@@ -158,49 +158,47 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
         
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        <form onSubmit={handleCreateAdmin} className={`border p-6 rounded-2xl space-y-4 ${theme.card}`}>
-          <h3 className="text-xs font-extrabold uppercase tracking-widest text-amber-500 flex items-center gap-2">
-            <PlusCircle size={16} /> Create Admin
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start h-[calc(100vh-210px)]">        
+        <form onSubmit={handleCreateAdmin} className={`lg:col-span-4 border p-4 rounded-2xl flex flex-col justify-between h-full ${theme.card}`}>
+          <h3 className="text-xs font-extrabold uppercase tracking-widest text-amber-500 flex items-center gap-2 mb-1">
+            <PlusCircle size={15} /> Create Admin
           </h3>
+          
           <div>
-            <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Full Name</label>
-            <input required type="text" placeholder="Mg Mg" value={newAdmin.name} onChange={e=>setNewAdmin({...newAdmin, name: e.target.value})} className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none border border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 ${theme.input}`} />
-
+            <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1">Full Name</label>
+            <input required type="text" placeholder="Mg Mg" value={newAdmin.name} onChange={e=>setNewAdmin({...newAdmin, name: e.target.value})} className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none border border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 ${theme.input}`} />
           </div>
           
-        <div>
-          <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Email Link Address</label>
-          <input required type="email" placeholder="operator@pay2pay.com" value={newAdmin.email} onChange={e=>{setNewAdmin({...newAdmin, email: e.target.value}); setErrors(p=>({...p, email:''}))}} className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none border ${errors.email ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500' : 'border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500'} ${theme.input}`} />
-          {errors.email && <p className="text-[10px] text-rose-500 font-semibold mt-1 pl-1">{errors.email}</p>}
-        </div>
-
-        <div>
-          <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Phone Index</label>
-          <input required type="text" placeholder="09xxxxxxxxx" value={newAdmin.phone} onChange={e=>{setNewAdmin({...newAdmin, phone: e.target.value}); setErrors(p=>({...p, phone:''}))}} className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none border ${errors.phone ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500' : 'border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500'} ${theme.input}`} />
-          {errors.phone && <p className="text-[10px] text-rose-500 font-semibold mt-1 pl-1">{errors.phone}</p>}
-        </div>
-
-        <div>
-        <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Password Key</label>
-        <input required type="password" placeholder="Enter a strong password" value={newAdmin.password} onChange={e=>{setNewAdmin({...newAdmin, password: e.target.value}); setErrors(p=>({...p, password:''}))}} className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none border ${errors.password ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500' : 'border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500'} ${theme.input}`} />
-        {errors.password && <p className="text-[10px] text-rose-500 font-semibold mt-1 pl-1">{errors.password}</p>}
-      </div>
-
           <div>
-            <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1.5">Authority Role Node</label>
-            <input type="text" value="admin" disabled className={`w-full rounded-xl px-4 py-2.5 text-xs focus:outline-none font-semibold bg-slate-100 dark:bg-slate-800 opacity-60 cursor-not-allowed ${theme.input}`} />
+            <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1">Email Link Address</label>
+            <input required type="email" placeholder="operator@pay2pay.com" value={newAdmin.email} onChange={e=>{setNewAdmin({...newAdmin, email: e.target.value}); setErrors(p=>({...p, email:''}))}} className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none border ${errors.email ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500' : 'border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500'} ${theme.input}`} />
+            {errors.email && <p className="text-[10px] text-rose-500 font-semibold mt-0.5 pl-1">{errors.email}</p>}
           </div>
 
-          <button type="submit" className="w-full py-3 bg-amber-500 hover:bg-amber-600 rounded-xl text-xs font-black uppercase tracking-wider text-slate-950 transition-all shadow-lg shadow-amber-500/15">
+          <div>
+            <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1">Phone Index</label>
+            <input required type="text" placeholder="09xxxxxxxxx" value={newAdmin.phone} onChange={e=>{setNewAdmin({...newAdmin, phone: e.target.value}); setErrors(p=>({...p, phone:''}))}} className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none border ${errors.phone ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500' : 'border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500'} ${theme.input}`} />
+            {errors.phone && <p className="text-[10px] text-rose-500 font-semibold mt-0.5 pl-1">{errors.phone}</p>}
+          </div>
+
+          <div>
+            <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1">Password Key</label>
+            <input required type="password" placeholder="Enter a strong password" value={newAdmin.password} onChange={e=>{setNewAdmin({...newAdmin, password: e.target.value}); setErrors(p=>({...p, password:''}))}} className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none border ${errors.password ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500' : 'border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500'} ${theme.input}`} />
+            {errors.password && <p className="text-[10px] text-rose-500 font-semibold mt-0.5 pl-1">{errors.password}</p>}
+          </div>
+
+
+          <button type="submit" className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 rounded-xl text-xs font-black uppercase tracking-wider text-slate-950 transition-all shadow-lg shadow-amber-500/15 mt-2">
             Create Admin Account
           </button>
         </form>
 
-        <div className={`lg:col-span-2 border rounded-2xl overflow-hidden ${theme.tableBg}`}>
-          <div className="overflow-x-auto">
+
+        <div className={`lg:col-span-8 border rounded-2xl flex flex-col h-full overflow-hidden ${theme.tableBg}`}>
+          <div className="overflow-x-auto overflow-y-auto h-full scrollbar-thin">
             {loading ? (
-              <div className="p-12 flex flex-col items-center justify-center gap-2 text-slate-400">
+              <div className={`lg:col-span-8 border rounded-2xl overflow-hidden flex flex-col max-h-[calc(100vh-220px)] ${theme.tableBg}`}>
+
                 <Loader2 className="animate-spin" size={24} />
                 <p className="text-xs font-mono">Connecting Database Node...</p>
               </div>

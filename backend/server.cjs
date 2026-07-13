@@ -601,7 +601,8 @@ app.post('/api/tickets/submit', (req, res) => {
             console.error("Insert Error:", err);
             return res.status(500).json({ success: false, message: err.message });
         }
-        res.json({ success: true, message: "Ticket submitted successfully." });
+        res.json({ success: true, message: "Ticket submitted successfully." , ticketId: savedTicket.id});
+
     });
 });
 

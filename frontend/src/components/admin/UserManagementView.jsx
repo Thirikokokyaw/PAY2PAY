@@ -159,7 +159,7 @@ const handleToggleBlacklist = async (userId, userIsBlacklisted) => {
     const matchesRole = u.role === 'user' || !u.role; // role  default user 
     const searchLower = userSearch.toLowerCase();
     const matchesName = u.name && u.name.toLowerCase().includes(searchLower);
-    const matchesPhone = u.phone && u.phone.includes(userSearch);
+    const matchesPhone = u.phone && u.phone.includes(userSearch.trim());
     const matchesSearch = matchesName || matchesPhone;
     return matchesRole && matchesSearch;
   });
@@ -178,23 +178,40 @@ const handleToggleBlacklist = async (userId, userIsBlacklisted) => {
 
         {/*  Phone Number search Input Box */}
         <div className="relative w-full md:w-80">
-          <Search size={16} className="absolute left-3.5 top-3 text-slate-400" />
+          <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+            <Search size={15} />
+          </span>
           <input
             type="text"
             placeholder="Search by name or phone..."
             value={userSearch}
             onChange={(e) => setUserSearch(e.target.value)}
-            className={`w-full rounded-xl border border-slate-300 dark:border-slate-700 pl-10 pr-4 py-2.5 text-xs focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 placeholder-slate-400 ${theme.input || ''}`}
-            />
+            className={`w-full text-xs pl-9 pr-12 py-2.5 rounded-xl border outline-none font-medium transition-all ${
+              isDarkMode 
+                ? 'bg-slate-900 border-slate-800 focus:border-amber-500 text-slate-100' 
+                : 'bg-white border-slate-200 focus:border-amber-500 text-slate-800 shadow-sm'
+            } ${theme.input || ''}`}
+          />
+          {userSearch && (
+            <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+              <button 
+                onClick={() => setUserSearch('')} 
+                className="text-[10px] font-bold text-slate-400 hover:text-slate-200 transition flex items-center gap-0.5"
+              >
+                Clear
+              </button>
+            </div>
+          )}
         </div>
-      </div>
+        </div>
 
       {/*  Scroll */}
-      <div className={`border rounded-2xl overflow-hidden ${theme.tableBg || ''}`}>
-        <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
+      <div className={`border rounded-2xl overflow-hidden flex flex-col max-h-[calc(100vh-210px)] ${theme.tableBg || ''}`}>
+        <div className="overflow-x-auto overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700">
           <table className="w-full text-left text-xs border-collapse min-w-[700px]">
-            {/* 💡 FIXED: Sticky top Background Color  */}
-            <thead className="sticky top-0 z-10 shadow-sm">
+                      
+            <thead className="sticky top-0 z-10 shadow-sm bg-inherit">
+
               <tr className={`font-extrabold border-b uppercase tracking-wider ${theme.th || ''} ${isDarkMode ? 'bg-slate-900 text-slate-200' : 'bg-slate-100 text-slate-700'}`}>
                 <th className="p-4">Account Holder Name</th>
                 <th className="p-4">Phone Matrix</th>
