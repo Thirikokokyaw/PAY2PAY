@@ -6,11 +6,13 @@ export default function ApprovedTransactionsView({ theme, isDarkMode }) {
   const [transactions, setTransactions] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
+
   // Date range state
   const [dateRange, setDateRange] = useState({ 
     start: new Date().toISOString().split('T')[0], 
     end: new Date().toISOString().split('T')[0] 
   });
+  const today = new Date().toISOString().split('T')[0];
 
   const fetchApproved = async () => {
     setLoading(true);
@@ -54,13 +56,26 @@ export default function ApprovedTransactionsView({ theme, isDarkMode }) {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h2 className={`text-xl font-extrabold tracking-tight uppercase ${theme.textTitle}`}>Approved History</h2>
-          <p>Review the approved transaction details</p>
+          <p className={`text-xs ${theme.textMuted}`}>Review the approved transaction details</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <input type="date" value={dateRange.start} onChange={(e) => setDateRange({...dateRange, start: e.target.value})} className={`p-2.5 rounded-xl border text-xs ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`} />
+          {/* <input type="date" value={dateRange.start} onChange={(e) => setDateRange({...dateRange, start: e.target.value})} className={`p-2.5 rounded-xl border text-xs ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`} /> */}
+          <input 
+            type="date" 
+            max={today}
+            value={dateRange.start} 
+            onChange={(e) => setDateRange({...dateRange, start: e.target.value})} 
+            className={`p-2.5 rounded-xl border text-xs ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`} 
+          />
           <span className="text-slate-400">to</span>
-          <input type="date" value={dateRange.end} onChange={(e) => setDateRange({...dateRange, end: e.target.value})} className={`p-2.5 rounded-xl border text-xs ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`} />
+          {/* <input type="date" value={dateRange.end} onChange={(e) => setDateRange({...dateRange, end: e.target.value})} className={`p-2.5 rounded-xl border text-xs ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`} /> */}
+          <input type="date" 
+            max={today} 
+            value={dateRange.end} 
+            onChange={(e) => setDateRange({...dateRange, end: e.target.value})} 
+            className={`p-2.5 rounded-xl border text-xs ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`} 
+          />
           
           <div className="relative w-full md:w-52">
             <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />

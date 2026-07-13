@@ -4,6 +4,8 @@ import {
   ArrowLeft, Send, Wallet, RefreshCw
 } from 'lucide-react';
 import { ThemeContext } from '../App.jsx';
+// import { io } from 'socket.io-client';
+import { socket } from '../socket'; 
 import '../App.css';
 
 export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, onRedirectToLogin = () => {} }) {
@@ -12,6 +14,10 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // Real-time Status Tracking States
+  const [currentTxnId, setCurrentTxnId] = useState(null);
+  const [status, setStatus] = useState('pending'); // 'pending' | 'success'
+
   // Wallet Data State Pool (Populated dynamically from Database array)
   const [wallets, setWallets] = useState([]);
   const [fromWallet, setFromWallet] = useState('');
@@ -39,6 +45,24 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
     }
   }, [isLoggedIn, onRedirectToLogin]);
 
+  // SOCKET LISTENER FOR ADMIN APPROVAL
+  useEffect(() => {
+    if (step === 4 && (currentTxnId || lastSixDigits)) {
+      const handleUpdate = (data) => {
+        // Match either the full transactionId or the tail, depending on what the backend emitted
+        if (String(data.transactionId) === String(currentTxnId) || String(data.transactionId) === String(lastSixDigits)) {
+          setStatus('success');
+        }
+      };
+
+      socket.on('transaction_updated', handleUpdate);
+
+      return () => {
+        socket.off('transaction_updated', handleUpdate);
+      };
+    }
+  }, [step, currentTxnId, lastSixDigits]);
+
   // FETCH REAL-TIME WALLET DATA & RATES FROM DATABASE VIA API
   const fetchWalletBalances = async () => {
     if (!userInfo?.id) return;
@@ -57,7 +81,6 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
         }
 
         if (userData.status === 'Blocked') {
-         
           if (typeof setUserInfo === 'function') {
             setUserInfo(prev => ({ ...prev, status: 'Blocked' }));
           }
@@ -88,14 +111,13 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
       console.error("Failed to fetch custom fee rate, using fallback:", e);
     }
 
-    // ORIGINAL WALLET BALANCES FETCH LOGIC (Updated to parse SQL Table rows array)
+    // ORIGINAL WALLET BALANCES FETCH LOGIC
     try {
       const response = await fetch('http://localhost:5000/api/wallets');
-      const data = await response.json(); // Returns array from database SELECT
+      const data = await response.json(); 
       
       if (Array.isArray(data) && data.length > 0) {
         setWallets(data);
-        
         const activeWallets = data.filter(w => w.is_active === 'Y');
    
         if (activeWallets.length > 0) {
@@ -144,7 +166,8 @@ export default function ExchangeFormPage({ isLoggedIn, userInfo, setUserInfo, on
 
   const transferAmount = Number(amount) || 0;
   // Dynamic Fee Calculation based on database feeRate
-const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 100)) : 0;
+  const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 100)) : 0;
+
   // USER ACCOUNT BLOCKED STATEMENT
   if (isLoggedIn && userInfo && userInfo.status === 'Blocked') {
     return (
@@ -163,7 +186,6 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
   // STEP 1 VALIDATION
   const handleWalletSubmit = (e) => {
     e.preventDefault();
-
     setGatewayError('');
     
     if (fromWallet === toWallet) {
@@ -241,7 +263,9 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
 
       const result = await response.json();
       if (response.ok && result.success) {
-        setStep(4); // Success and Pending view
+        setCurrentTxnId(result.transactionId || lastSixDigits); // Save ID for socket listener
+        setStatus('pending'); // Reset status to pending for Step 4
+        setStep(4);
       } else {
         alert(`Core Rejection: ${result.message || 'Transaction submission failed.'}`);
       }
@@ -378,11 +402,8 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
 
       {/* STEP 2: GATEWAY DEPOSIT */}
       {step === 2 && (
-  <div className="space-y-4 text-center">
+        <div className="space-y-4 text-center">
           <div className={`p-5 border rounded-2xl ${bgInner} flex flex-col items-center`}>
-            {/* <span className={`text-[9px] font-black uppercase tracking-widest mb-2.5 flex items-center gap-1 border px-2 py-0.5 rounded-full ${darkMode ? 'text-amber-300 bg-amber-500/10 border-amber-500/20' : 'text-amber-700 bg-amber-50 border-amber-200'}`}>
-              <CheckCircle size={10} /> Secure Vault Active
-            </span> */}
             <p className={`text-xs font-medium mb-3 ${darkMode ? 'text-slate-100' : 'text-slate-700'}`}>
               Transmit funds to <span className="text-amber-500 font-bold">{selectedFromWalletDetails?.wallet_name}</span> 
             </p>
@@ -436,7 +457,7 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
 
       {/* STEP 3: TRANSACTION METADATA COLLECTION */}
       {step === 3 && (
-  <form onSubmit={handleExchangeSubmit} className="space-y-4">
+        <form onSubmit={handleExchangeSubmit} className="space-y-4">
           <div className={`p-3.5 rounded-2xl border ${bgInner} space-y-2.5`}>
             <div className={`flex items-center justify-between text-xs border-b pb-2 ${darkMode ? 'border-amber-500/10' : 'border-amber-500/20'}`}>
               <span className={`font-bold flex items-center gap-1.5 ${darkMode ? 'text-amber-100' : 'text-slate-800'}`}>
@@ -548,39 +569,53 @@ const netReceivedAmount = transferAmount > 0 ? transferAmount * (1 - (feeRate / 
         </form>
       )}
 
-      {/* STEP 4: SUCCESS & PENDING CONFIRMATION */}
+      {/* STEP 4: SUCCESS & PENDING CONFIRMATION (Dynamic Status) */}
       {step === 4 && (
         <div className="text-center py-6 space-y-5 animate-fadeIn">
-          <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto border shadow-sm bg-amber-500/10 text-amber-500 border-amber-500/30">
-            <RefreshCw size={26} className="animate-spin text-amber-500" />
+          <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto border shadow-sm ${status === 'pending' ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' : 'bg-green-500/10 border-green-500/30 text-green-500'}`}>
+            {status === 'pending' ? (
+              <RefreshCw size={26} className="animate-spin" />
+            ) : (
+              <CheckCircle size={26} />
+            )}
           </div>
+          
           <div className="space-y-1.5">
-            <span className="text-[10px] font-black px-2.5 py-1 rounded-full uppercase bg-amber-500/20 text-amber-500 font-mono tracking-widest border border-amber-500/30 animate-pulse">
-              Status: PENDING
+            <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase font-mono tracking-widest border ${status === 'pending' ? 'bg-amber-500/20 text-amber-500 border-amber-500/30 animate-pulse' : 'bg-green-500/20 text-green-500 border-green-500/30'}`}>
+              Status: {status === 'pending' ? 'PENDING' : 'APPROVED'}
             </span>
-            <h4 className={`text-xs font-black uppercase tracking-widest mt-3 ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>Submission Successful</h4>
+            <h4 className={`text-xs font-black uppercase tracking-widest mt-3 ${status === 'pending' ? (darkMode ? 'text-amber-400' : 'text-amber-600') : 'text-green-600'}`}>
+              {status === 'pending' ? 'Submission Successful' : 'Transaction Completed'}
+            </h4>
             <p className={`text-[11px] leading-relaxed px-4 ${textMuted}`}>
-              Your dynamic exchange balance transfer execution will update upon processing approval within 20 minutes.
+              {status === 'pending' 
+                ? 'Your dynamic exchange balance transfer execution will update upon processing approval within 20 minutes.' 
+                : 'Your funds have been successfully settled and transferred to your destination wallet.'}
             </p>
           </div>
-          <div className="pt-2">
-            <button 
-              type="button"
-              onClick={() => {
-                setStep(1);
-                setAmount('');
-                setLastSixDigits('');
-                setSenderAccountName('');
-                setSenderPhone('');
-                setReceiverPhone('');
-                setReceiverName('');
-                fetchWalletBalances(); 
-              }}
-              className="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all bg-amber-500 hover:bg-amber-600 text-white shadow-md"
-            >
-              New Transaction
-            </button>
-          </div>
+          
+          {status === 'success' && (
+            <div className="pt-2 animate-fadeIn">
+              <button 
+                type="button"
+                onClick={() => {
+                  setStep(1);
+                  setStatus('pending');
+                  setCurrentTxnId(null);
+                  setAmount('');
+                  setLastSixDigits('');
+                  setSenderAccountName('');
+                  setSenderPhone('');
+                  setReceiverPhone('');
+                  setReceiverName('');
+                  fetchWalletBalances(); 
+                }}
+                className="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all bg-green-500 hover:bg-green-600 text-white shadow-md"
+              >
+                New Transaction
+              </button>
+            </div>
+          )}
         </div>
       )}
 

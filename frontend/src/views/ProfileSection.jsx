@@ -137,6 +137,7 @@ export default function ProfileSection({
     setIsEditing(false);
     alert("Profile details have been updated in the database system successfully.");
   };
+  
   // Add this inside your ProfileSection component
   const handlePasswordSubmit = async (e) => {
   e.preventDefault();
@@ -194,7 +195,7 @@ useEffect(() => {
       
       // Map database columns to match your UI expectation
       const formattedTickets = data.map(t => ({
-        id: `TKT-${t.id}`, // Assuming your DB ID is a number
+        id: `TXN-${t.id}`, // Assuming your DB ID is a number
         status: t.status,
         route: t.route,
         txn: t.txn_no,
@@ -291,6 +292,59 @@ useEffect(() => {
   }
 };
 
+const downloadVoucherHandle = async () => {
+    const element = voucherRef.current;
+    if (!element) return;
+    
+    try {
+      // Force inline styling rules temporarily to guarantee correct heights
+      const originalStyle = element.style.cssText;
+      element.style.transform = 'none';
+      element.style.letterSpacing = 'normal';
+      
+      // Execute capture with strict formatting settings
+      const canvas = await html2canvas(element, {
+        useCORS: true,
+        allowTaint: false, // Set to false to avoid cross-origin tainted canvas locks
+        scale: 2,
+        backgroundColor: isDarkMode ? "#0f172a" : "#ffffff",
+        logging: false,
+        scrollX: 0,
+        scrollY: -window.scrollY, // Negate scroll positions to prevent offset cutoff bugs
+        windowWidth: document.documentElement.offsetWidth,
+        windowHeight: document.documentElement.offsetHeight,
+      });
+
+      // Restore baseline component configurations
+      element.style.cssText = originalStyle;
+
+      const image = canvas.toDataURL("image/png", 1.0);
+      const link = document.createElement("a");
+      
+      // Cross-platform compatible virtual pointer download event trigger
+      link.setAttribute("href", image);
+      link.setAttribute("download", `Voucher-TXN-${selectedTxn?.id || 'Receipt'}.png`);
+      link.style.display = "none";
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Critical rendering failure details:", error);
+      alert("Failed to compile receipt image engine natively. Please take a screenshot of your screen to save this file.");
+    }
+  };
+
+// Handle Card Clicks (Block Pending from opening)
+  const handleTransactionClick = (txn) => {
+    if (String(txn.status) === "0") {
+      // Pending state -> Do nothing when clicked
+      return; 
+    }
+    setSelectedTxn(txn);
+    setShowVoucher(true);
+  };
+
 //end modified code
 
   const getStatusDetails = (statusCode) => {
@@ -299,23 +353,26 @@ useEffect(() => {
         return { 
           label: "Approved", 
           badgeStyle: { backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.2)' },
-          canvasColor: "#10b981", 
-          text: "TRANSFER SUCCESSFUL" 
+          heading: "TRANSACTION SUCCESSFUL",
+          note: "Thank you for exchanging with us! Your funds have been successfully transferred to the target wallet.",
+          colorClass: "text-emerald-500"
         };
       case "2":
         return { 
           label: "Rejected", 
           badgeStyle: { backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)' },
-          canvasColor: "#ef4444", 
-          text: "TRANSACTION REJECTED" 
+          heading: "TRANSACTION REJECTED",
+          note: "We are sorry, but this transaction was cancelled or declined. Please check your transaction details and try again.",
+          colorClass: "text-rose-500"
         };
       case "0":
       default:
         return { 
           label: "Pending", 
           badgeStyle: { backgroundColor: 'rgba(245, 152, 11, 0.1)', color: '#f5980b', border: '1px solid rgba(245, 152, 11, 0.2)' },
-          canvasColor: "#f5980b", 
-          text: "TRANSACTION PENDING" 
+          heading: "TRANSACTION PENDING",
+          note: "Processing... Please wait a few moments.",
+          colorClass: "text-amber-500"
         };
     }
   };
@@ -579,28 +636,102 @@ useEffect(() => {
       {/*  DOWNLOADABLE VOUCHER MODAL */}
       {showVoucher && selectedTxn && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-sm rounded-3xl shadow-2xl relative overflow-hidden flex flex-col bg-slate-900 border border-slate-800">
-            <div className="flex justify-between items-center px-5 py-3.5 bg-slate-950 border-b border-slate-800">
-              <button onClick={downloadVoucherHandle} className="flex items-center gap-1.5 text-xs font-bold text-amber-400 hover:text-amber-300 transition"><Download size={15} /> Save Receipt</button>
-              <button onClick={() => setShowVoucher(false)} className="p-1 rounded-full bg-slate-800 text-slate-400 hover:text-white transition"><X size={16} /></button>
+          <div className={`w-full max-w-md rounded-3xl shadow-2xl relative overflow-hidden flex flex-col border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+            
+            {/* Header / Download Button (Kept outside voucherRef so it won't render inside the image screenshot) */}
+            <div className={`flex justify-between items-center px-5 py-3.5 border-b ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
+              <button onClick={downloadVoucherHandle} className="flex items-center gap-1.5 text-xs font-bold text-amber-500 hover:text-amber-400 transition">
+                <Download size={15} /> Save Receipt
+              </button>
+              <button onClick={() => setShowVoucher(false)} className={`p-1 rounded-full transition ${isDarkMode ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-200 text-slate-600 hover:text-slate-900'}`}>
+                <X size={16} />
+              </button>
             </div>
-            <div ref={voucherRef} style={{ backgroundColor: '#0f172a', color: '#ffffff' }} className="p-6 space-y-5 relative">
-              <div className="text-center space-y-1">
-                <div className="mx-auto w-11 h-11 bg-amber-500 text-slate-950 rounded-full flex items-center justify-center shadow-lg mb-2"><FileText size={20} /></div>
-                <h3 style={{ color: '#fbbf24' }} className="text-xs font-black uppercase tracking-widest">Transaction Voucher</h3>
-                <p style={{ color: '#94a3b8' }} className="text-[10px]">Secure Wallet Exchange Network</p>
+
+            {/* Receipt Content Capture Target Area */}
+            <div 
+              ref={voucherRef} 
+              className={`p-6 space-y-6 w-full block ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}`}
+            >
+              {/* Status Header Block */}
+              <div className="text-center space-y-2">
+                {/* Lucide SVGs with clean CSS checkmarks to stop html2canvas from crashing */}
+                <div className="flex justify-center">
+                  {String(selectedTxn.status) === "1" ? (
+                    <div className="w-12 h-12 bg-emerald-500/10 rounded-full border border-emerald-500/30 flex items-center justify-center text-emerald-500 font-bold text-lg">
+                      ✓
+                    </div>
+                  ) : (
+                    <div className="w-12 h-12 bg-rose-500/10 rounded-full border border-rose-500/30 flex items-center justify-center text-rose-500 font-bold text-lg">
+                      ✕
+                    </div>
+                  )}
+                </div>
+                <h3 className={`text-sm font-black tracking-wider ${getStatusDetails(selectedTxn.status).colorClass}`}>
+                  {getStatusDetails(selectedTxn.status).heading}
+                </h3>
+                <p className="text-[11px] max-w-xs mx-auto opacity-75">
+                  {getStatusDetails(selectedTxn.status).note}
+                </p>
               </div>
-              <div style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)', color: getStatusDetails(selectedTxn.status).canvasColor, border: `1px solid ${getStatusDetails(selectedTxn.status).canvasColor}` }} className="p-2.5 rounded-xl text-center text-[10px] font-black tracking-wide">{getStatusDetails(selectedTxn.status).text}</div>
-              <div className="text-center py-2 border-y border-dashed border-slate-700"><span style={{ color: '#ffffff' }} className="text-2xl font-mono font-black">{Number(selectedTxn.send_amount).toLocaleString()} <span className="text-xs font-bold text-slate-400">MMK</span></span></div>
-              <div className="space-y-2.5 text-[11px]">
-                <div className="flex justify-between"><span style={{ color: '#94a3b8' }}>Transaction ID:</span><span style={{ color: '#f8fafc' }} className="font-mono font-bold">{selectedTxn.txn_id}</span></div>
-                <div className="flex justify-between"><span style={{ color: '#94a3b8' }}>Timestamp:</span><span style={{ color: '#cbd5e1' }} className="font-mono">{selectedTxn.created_at}</span></div>
-                <div className="flex justify-between border-t border-slate-800 pt-2"><span style={{ color: '#94a3b8' }}>Source:</span><span style={{ color: '#fbbf24' }} className="font-bold uppercase">{selectedTxn.from_wallet}</span></div>
-                <div className="flex justify-between"><span style={{ color: '#94a3b8' }}>Destination:</span><span style={{ color: '#fbbf24' }} className="font-bold uppercase">{selectedTxn.to_wallet}</span></div>
+
+              {/* Transaction Meta Details */}
+              <div className={`rounded-2xl p-4 space-y-3 text-xs border ${isDarkMode ? 'bg-slate-950 border-slate-800/60' : 'bg-slate-50 border-slate-100'}`}>
+                <div className="flex justify-between items-center pb-2 border-b border-dashed border-slate-700/20">
+                  <span className="opacity-60">Transaction No</span>
+                  <span className="font-mono font-bold">#{selectedTxn.id}</span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="opacity-60">Exchange Route</span>
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <span>{selectedTxn.from_wallet}</span>
+                    <span className="opacity-40">➔</span>
+                    <span>{selectedTxn.to_wallet}</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="opacity-60">Sender Details</span>
+                  <div className="text-right">
+                    <span className="font-bold block">{selectedTxn.sender_name || 'N/A'}</span>
+                    <span className="font-mono text-[10px] opacity-60">{selectedTxn.sender_phone || 'N/A'}</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="opacity-60">Receiver Details</span>
+                  <div className="text-right">
+                    <span className="font-bold block">{selectedTxn.receiver_name || 'N/A'}</span>
+                    <span className="font-mono text-[10px] opacity-60">{selectedTxn.receiver_phone || 'N/A'}</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-dashed border-slate-700/20">
+                  <span className="opacity-60">Date & Time</span>
+                  <span className="font-mono">{selectedTxn.created_at}</span>
+                </div>
+              </div>
+
+              {/* Exchange Amount Summary */}
+              <div className={`rounded-2xl p-4 flex justify-between items-center border ${isDarkMode ? 'bg-gradient-to-br from-slate-950 to-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <div>
+                  <span className="text-[10px] uppercase font-bold opacity-50 block">Amount Sent</span>
+                  <span className="text-sm font-black text-amber-500">{Number(selectedTxn.send_amount).toLocaleString()} MMK</span>
+                </div>
+                <span className="opacity-30 text-xs">➔</span>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold opacity-50 block">Amount Received</span>
+                  <span className="text-sm font-black text-emerald-500">{Number(selectedTxn.receive_amount).toLocaleString()} MMK</span>
+                </div>
+              </div>
+              
+              {/* Simple Brand Footer inside receipt screenshot */}
+              <div className="text-center text-[10px] opacity-40 font-mono">
+                Generated securely via E-Wallet Exchange Platform
               </div>
             </div>
+
           </div>
-          
         </div>
       )}
       {/* Password Modal */}

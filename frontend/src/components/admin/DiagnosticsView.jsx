@@ -5,9 +5,15 @@ import { Download, Search, TrendingUp, ArrowUpRight, ArrowDownRight, ShoppingCar
 export default function DiagnosticsView({ theme, isDarkMode }) {
   const [stats, setStats] = useState({ totalOrders: 0, totalIn: 0, totalOut: 0, netProfit: 0 });
   const [history, setHistory] = useState([]);
-  const [searchTerm, setSearchTerm] = useState(''); // Search state ထည့်ထားသည်
-  const [dateRange, setDateRange] = useState({ start: '2026-07-01', end: '2026-07-31' });
-
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Date range state
+  const [dateRange, setDateRange] = useState({ 
+    start: new Date().toISOString().split('T')[0], 
+    end: new Date().toISOString().split('T')[0] 
+  });
+  const today = new Date().toISOString().split('T')[0];
+ 
   useEffect(() => {
     fetch('http://localhost:5000/api/dashboard/diagnostics')
       .then(res => res.json())
@@ -27,7 +33,6 @@ export default function DiagnosticsView({ theme, isDarkMode }) {
     XLSX.writeFile(wb, `Settlement_${dateRange.start}_to_${dateRange.end}.xlsx`);
   };
 
-  // Search filter
   const filteredHistory = history.filter(h => 
     String(h.settlement_date).toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -48,7 +53,6 @@ export default function DiagnosticsView({ theme, isDarkMode }) {
 
   return (
     <div className="space-y-6">
-      {/* Top Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Orders" value={stats.totalOrders} icon={ShoppingCart} color="text-blue-500" />
         <StatCard title="Today Cash In" value={stats.totalIn} icon={ArrowUpRight} color="text-emerald-500" />
@@ -56,7 +60,6 @@ export default function DiagnosticsView({ theme, isDarkMode }) {
         <StatCard title="Net Profit" value={stats.netProfit} icon={TrendingUp} color="text-amber-500" />
       </div>
 
-      {/* Header Section (Adjusted to match ApprovedTransactionsView) */}
       <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
@@ -65,8 +68,20 @@ export default function DiagnosticsView({ theme, isDarkMode }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <input type="date" value={dateRange.start} onChange={(e) => setDateRange({...dateRange, start: e.target.value})} className={`p-2.5 rounded-xl border text-xs outline-none ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`} />
-            <input type="date" value={dateRange.end} onChange={(e) => setDateRange({...dateRange, end: e.target.value})} className={`p-2.5 rounded-xl border text-xs outline-none ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`} />
+            <input 
+              type="date" 
+              max={today} 
+              value={dateRange.start} 
+              onChange={(e) => setDateRange({...dateRange, start: e.target.value})} 
+              className={`p-2.5 rounded-xl border text-xs outline-none ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`} 
+            />
+            <input 
+              type="date" 
+              max={today} 
+              value={dateRange.end} 
+              onChange={(e) => setDateRange({...dateRange, end: e.target.value})} 
+              className={`p-2.5 rounded-xl border text-xs outline-none ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`} 
+            />
             
             <div className="relative">
               <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
@@ -79,7 +94,6 @@ export default function DiagnosticsView({ theme, isDarkMode }) {
           </div>
         </div>
 
-        {/* Table Section */}
         <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead className={`sticky top-0 z-10 ${isDarkMode ? 'bg-slate-900' : 'bg-white'}`}>
