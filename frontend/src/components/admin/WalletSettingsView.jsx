@@ -208,7 +208,7 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
       </div>
 
       {/* Modified Layout: Vertical Scroll Box */}
-      <div className="max-h-[calc(100vh-220px)] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700">
+      <div className="max-h-[calc(100vh-240px)] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-4">
           {wallets.map(wallet => {
             const isActive = wallet.is_active === 'Y';
