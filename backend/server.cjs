@@ -14,6 +14,21 @@ const util = require('util');
 const execPromise = require('util').promisify(require('child_process').exec);
 
 const app = express();
+const winston = require('winston');
+const LOGS_DIR = path.join(__dirname, 'logs');
+if (!fs.existsSync(LOGS_DIR)) {
+    fs.mkdirSync(LOGS_DIR);
+}
+const auditLogger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: path.join(LOGS_DIR, 'audit.log') })
+  ]
+});
 const server = http.createServer(app); 
 
 const io = new Server(server, {
@@ -35,6 +50,40 @@ const JWT_SECRET = "10100100";
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+app.use((req, res, next) => {
+    const token = req.cookies?.auth_token || req.headers.authorization?.split(' ')[1];
+    if (token) {
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET);
+
+            const adminName = decoded.name || decoded.user?.name || 'Admin';
+            const adminEmail = decoded.email || decoded.user?.email || 'N/A';
+            
+            req.adminInfo = { name: adminName, email: adminEmail };
+        } catch (e) {
+            req.adminInfo = { name: 'System/Guest', email: 'N/A' };
+        }
+    } else {
+        req.adminInfo = { name: 'System/Guest', email: 'N/A' };
+    }
+    next();
+});
+
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    if (req.method !== 'GET' && res.statusCode >= 200 && res.statusCode < 300) {
+      auditLogger.info({
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19), // 
+        adminName: req.adminInfo?.name || 'System/Guest',
+        adminEmail: req.adminInfo?.email || 'N/A',
+        action: req.originalUrl,
+        status: '✔', 
+        ip: req.ip
+      });
+    }
+  });
+  next();
+});
 // Static Folder setup (Upload Frontend )
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -1535,6 +1584,24 @@ app.get('/api/admin/approved-transactions', async (req, res) => {
     }
 });
 
+app.get('/api/admin/audit-logs', (req, res) => {
+  try {
+    const logPath = path.join(__dirname, 'logs', 'audit.log');
+    if (!fs.existsSync(logPath)) {
+      return res.json({ success: true, logs: [] });
+    }
+    
+    const data = fs.readFileSync(logPath, 'utf8');
+    const logs = data.trim().split('\n')
+      .filter(line => line.trim() !== '')
+      .map(line => JSON.parse(line))
+      .reverse(); 
+      
+    res.json({ success: true, logs: logs });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Cannot read audit logs: " + err.message });
+  }
+});
 // ─── SERVER STARTUP LISTENER ───
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {

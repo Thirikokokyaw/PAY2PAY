@@ -62,7 +62,6 @@ export default function AuthPage({ onLoginSuccess, onClose }) {
         const data = await response.json();
         
         if (response.ok) {
-          alert("🎉 " + data.message);
           setIsRegister(false);
           setConfirmPassword('');
           setErrors({ phone: '', email: '', password: '' });
@@ -185,17 +184,23 @@ export default function AuthPage({ onLoginSuccess, onClose }) {
         </div>
 
         <div className={isRegister ? "grid grid-cols-2 gap-2" : "space-y-3"}>
-          <div>
-            <label className={`block text-[10px] font-bold uppercase mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-500'}`}>Password</label>
-            <div className={`flex items-center border rounded-lg px-2.5 py-1.5 ${darkMode ? 'bg-slate-900/60 border-slate-800/60' : 'bg-slate-50 border-slate-300'}`}>
-              <Lock size={14} className="text-amber-300 mr-1.5 flex-shrink-0" />
-              <input required type="password" placeholder="••••••••" value={password} onChange={(e) => {
-                setPassword(e.target.value);
-                setErrors(prev => ({ ...prev, password: '' })); 
-              }} className="bg-transparent text-xs w-full focus:outline-none text-current placeholder-slate-400" />
-              
-            </div>
-          </div>
+         <div>
+  <label className={`block text-[10px] font-bold uppercase mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-500'}`}>Password</label>
+  <div className={`flex items-center border rounded-lg px-2.5 py-1.5 ${darkMode ? 'bg-slate-950/50 border-slate-800/60' : 'bg-slate-50 border-slate-300'}`}>
+    <Lock size={14} className="text-amber-300 mr-1.5 flex-shrink-0" />
+    <input 
+      required 
+      type="password" 
+      placeholder="••••••••" 
+      value={password} 
+      onChange={(e) => {
+        setPassword(e.target.value);
+        setErrors(prev => ({ ...prev, password: '' })); 
+      }} 
+      className="bg-transparent text-xs w-full focus:outline-none text-current placeholder-slate-400" 
+    />
+  </div>
+</div>
 
           {isRegister && (
             <div>

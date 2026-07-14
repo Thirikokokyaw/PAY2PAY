@@ -54,6 +54,7 @@ export default function ProfileSection({
   const [toPay, setToPay] = useState('WaveMoney');
   const [supportTxnNo, setSupportTxnNo] = useState('');
   const [supportMessage, setSupportMessage] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [supportTickets, setSupportTickets] = useState([
     {
       id: "TKT-9941",
@@ -135,58 +136,60 @@ export default function ProfileSection({
       });
     }
     setIsEditing(false);
-    alert("Profile details have been updated in the database system successfully.");
+    
+    setToast({ show: true, message: "Profile updated successfully.", type: "success" });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 1000);
   };
   
   // Add this inside your ProfileSection component
   const handlePasswordSubmit = async (e) => {
-  e.preventDefault();
-  
-  setOldPasswordError("");
-  setNewPasswordError("");
-  setConfirmPasswordError("");
-  
-  if (!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
-      alert("Please fill all password fields.");
+    e.preventDefault();
+    setOldPasswordError("");
+    setNewPasswordError("");
+    setConfirmPasswordError("");
+    
+    if (!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      setToast({ show: true, message: "Please fill all password fields.", type: "error" });
+      setTimeout(() => setToast({ show: false, message: '', type: 'error' }), 1000);
       return;
     }
-    
-  // 1. New Password 
-  if (passwordForm.newPassword.length < 8) {
-    setNewPasswordError("Password must be at least 8 characters long.");
-    return;
-  }
+      
+    if (passwordForm.newPassword.length < 8) {
+      setNewPasswordError("Password must be at least 8 characters long.");
+      return;
+    }
 
-  // 2. Confirm Password 
-  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-    setConfirmPasswordError("Confirm password does not match new password.");
-    return;
-  }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setConfirmPasswordError("Confirm password does not match new password.");
+      return;
+    }
 
-  if (setUserInfo) {
-    const res = await setUserInfo({
-      ...userInfo,
-      name: editName,
-      phone: editPhone,
-      email: editEmail,
-      profile_photo: tempAvatar,
-      oldPassword: passwordForm.oldPassword, 
-      password: passwordForm.newPassword
-    });
+    if (setUserInfo) {
+      const res = await setUserInfo({
+        ...userInfo,
+        name: editName,
+        phone: editPhone,
+        email: editEmail,
+        profile_photo: tempAvatar,
+        oldPassword: passwordForm.oldPassword, 
+        password: passwordForm.newPassword
+      });
 
-    if (res && res.success) {
-      setIsPasswordModalOpen(false);
-      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
-      alert("Password changed successfully.");
-    } else {
-      if (res.error && res.error.toLowerCase().includes("old password")) {
-        setOldPasswordError(res.error);
+      if (res && res.success) {
+        setIsPasswordModalOpen(false);
+        setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+        
+        setToast({ show: true, message: "Password changed successfully.", type: "success" });
+        setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 1000);
       } else {
-        setConfirmPasswordError(res.error || "An error occurred.");
+        if (res.error && res.error.toLowerCase().includes("old password")) {
+          setOldPasswordError(res.error);
+        } else {
+          setConfirmPasswordError(res.error || "An error occurred.");
+        }
       }
     }
-  }
-};
+  };
 useEffect(() => {
   const fetchTickets = async () => {
     try {
@@ -229,33 +232,47 @@ useEffect(() => {
 
   //modified code
   const handleSupportSubmit = async (e) => {
-  e.preventDefault();
-  
-  const ticketData = {
-    userId: userInfo.id, 
-    fromPay,
-    toPay,
-    txnNo: supportTxnNo,
-    message: supportMessage
-  };
+    e.preventDefault();
+    
+    const ticketData = {
+      userId: userInfo.id, 
+      fromPay,
+      toPay,
+      txnNo: supportTxnNo,
+      message: supportMessage
+    };
 
-  try {
-    const response = await fetch('http://localhost:5000/api/tickets/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(ticketData)
-    });
+    try {
+      const response = await fetch('http://localhost:5000/api/tickets/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ticketData)
+      });
 
-    const result = await response.json();
-    if (result.success) {
-      alert("Ticket submitted successfully!");
-      setSupportTxnNo('');
-      setSupportMessage('');
+      const result = await response.json();
+      if (result.success) {
+        const clientTicket = {
+          id: `TKT-${result.ticketId || Math.floor(1000 + Math.random() * 9000)}`,
+          status: "Pending Review",
+          route: `${fromPay} ➔ ${toPay}`,
+          txn: supportTxnNo,
+          userMsg: supportMessage,
+          sysReply: "Awaiting response..."
+        };
+        setSupportTickets(prev => [clientTicket, ...prev]);
+
+        setSupportTxnNo('');
+        setSupportMessage('');
+
+        setToast({ show: true, message: "Support Ticket submitted successfully.", type: "success" });
+        setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 1500);
+      }
+    } catch (error) {
+      console.error("Submission Error:", error);
+      setToast({ show: true, message: "Submission failed.", type: "error" });
+      setTimeout(() => setToast({ show: false, message: '', type: 'error' }), 1500);
     }
-  } catch (error) {
-    console.error("Submission Error:", error);
-  }
-};
+  };
 
 const downloadVoucherHandle = async () => {
     const element = voucherRef.current;
@@ -386,6 +403,19 @@ const downloadVoucherHandle = async () => {
 
   return (
     <div className="max-w-6xl mx-auto w-full px-4 py-4 flex flex-col md:grid md:grid-cols-4 gap-6 items-start">
+      
+      {toast.show && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/20 backdrop-blur-[2px]">
+          <div className={`transform transition-all duration-300 scale-100 flex items-center gap-2.5 px-5 py-3.5 rounded-2xl shadow-2xl border font-bold text-xs text-white animate-in fade-in zoom-in-95 ${
+            toast.type === 'success' 
+              ? 'bg-emerald-500 border-emerald-400' 
+              : 'bg-rose-500 border-rose-400'
+          }`}>
+            <CheckCircle size={16} className="shrink-0" />
+            <span>{toast.message}</span>
+          </div>
+        </div>
+      )}
       
       {/*  MOBILE NAVIGATION & QUICK PROFILE BAR */}
       <div className={`w-full md:hidden rounded-2xl border p-3 flex flex-col space-y-3 shadow-md ${themeClasses.sidebarBg}`}>

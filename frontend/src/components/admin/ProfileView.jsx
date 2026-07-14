@@ -7,6 +7,7 @@ export default function ProfileView({ theme, isDarkMode, adminData, setAdminData
   const [editForm, setEditForm] = useState({ ...adminData });
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const fileInputRef = useRef(null);
+  const [toast, setToast] = useState({ show: false, message: '', type: '' });
 
   const [passwordForm, setPasswordForm] = useState({
     oldPassword: '',
@@ -65,7 +66,8 @@ export default function ProfileView({ theme, isDarkMode, adminData, setAdminData
           password: passwordForm.newPassword || undefined
         };
         await setAdminData(finalPayload);
-        alert("Profile updated successfully!");
+        setToast({ show: true, message: "Profile update success", type: "success" });
+setTimeout(() => setToast({ show: false, message: '', type: '' }), 1000);
       }
       setIsEditing(false);
     } catch (err) {
@@ -123,7 +125,8 @@ export default function ProfileView({ theme, isDarkMode, adminData, setAdminData
         }
         
         // Success Actions
-        alert("Password updated successfully!");
+        setToast({ show: true, message: "Password change successful", type: "success" });
+setTimeout(() => setToast({ show: false, message: '', type: '' }), 1000);
         setIsPasswordModalOpen(false);
         setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
       }
@@ -296,7 +299,14 @@ export default function ProfileView({ theme, isDarkMode, adminData, setAdminData
           </div>
         </div>
       )}
-
+      {toast.show && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/20 backdrop-blur-[2px]">
+          <div className="transform transition-all duration-300 scale-100 flex items-center gap-2.5 px-5 py-3.5 rounded-2xl shadow-2xl border font-extrabold text-xs text-white bg-emerald-500 border-emerald-400 animate-in fade-in zoom-in-95">
+            <Check size={16} className="shrink-0" />
+            <span>{toast.message}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
