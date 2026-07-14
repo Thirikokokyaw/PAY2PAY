@@ -796,12 +796,18 @@ app.post('/api/tickets/submit', (req, res) => {
     db.execute(sql, [userId, `${fromPay} ➔ ${toPay}`, txnNo, message], (err, result) => {
         if (err) {
             console.error("Insert Error:", err);
-            return res.status(500).json({ success: false, message: err.message });
+            return res.status(500).json({ success: false, error: err.message });
         }
-        res.json({ success: true, message: "Ticket submitted successfully." , ticketId: savedTicket.id});
+        const insertedId = result.insertId;
 
+        res.json({ 
+            success: true, 
+            message: "Ticket submitted successfully.", 
+            ticketId: insertedId 
+        });
     });
 });
+
 
 // Fetch Tickets Route (Using Callbacks)
 /*
