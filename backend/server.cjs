@@ -13,6 +13,9 @@ const util = require('util');
 // const execPromise = util.promisify(exec);
 const execPromise = require('util').promisify(require('child_process').exec);
 
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
+
 const app = express();
 const winston = require('winston');
 const LOGS_DIR = path.join(__dirname, 'logs');
@@ -598,7 +601,6 @@ app.post('/api/exchange/submit', async (req, res) => {
     }
 });
 
-// USER REGISTER 
 app.post('/api/register', async (req, res) => {
     const { name, phone, email, password } = req.body;
 
@@ -608,7 +610,7 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ message: cobolRes.message });
         }
 
-        db.query('SELECT email FROM users WHERE email = ?', [email], (err, results) => {
+        db.query('SELECT email FROM users WHERE email = ?', [email], async (err, results) => {
             if (err) return res.status(500).json({ message: 'Database error' });
             if (results.length > 0) {
                 return res.status(400).json({ message: 'Email already registered.' });
@@ -617,23 +619,33 @@ app.post('/api/register', async (req, res) => {
             const defaultPhoto = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150';
             const userRole = 'user';
 
-            const sql = 'INSERT INTO users (name, phone, email, password, role, profile_photo) VALUES (?, ?, ?, ?, ?, ?)';
-            db.query(sql, [name, phone, email, password, userRole, defaultPhoto], (err, result) => {
-                if (err) return res.status(500).json({ message: 'Registration failed.' });
-                res.status(201).json({ message: 'Registration successful! Please login.' });
-            });
+            try {
+                const hashedPassword = await bcrypt.hash(password, saltRounds);
+                
+                const sql = 'INSERT INTO users (name, phone, email, password, role, profile_photo) VALUES (?, ?, ?, ?, ?, ?)';
+                db.query(sql, [name, phone, email, hashedPassword, userRole, defaultPhoto], (insertErr, result) => {
+                    if (insertErr) {
+                        return res.status(500).json({ message: 'Error registering user' });
+                    }
+                    return res.status(201).json({ success: true, message: 'Registration successful!' });
+                });
+            } catch (hashErr) {
+                return res.status(500).json({ message: 'Error hashing password' });
+            }
         });
 
     } catch (error) {
-        res.status(500).json({ message: error });
+        res.status(500).json({ message: error.message || error });
     }
 });
 
-// LOGIN Auth Token 
+// ==========================================
+// LOGIN Auth Token
+// ==========================================
 app.post('/api/login', (req, res) => {
     const { email, password } = req.body;
     const query = `SELECT id, name, phone, email, password, role, status, isBlacklisted FROM users WHERE email = ?`;
-    
+   
     db.query(query, [email], async (err, results) => {
         if (err) return res.status(500).json({ message: "Database error" });
         if (results.length === 0) return res.status(400).json({ message: "User not found" });
@@ -644,34 +656,41 @@ app.post('/api/login', (req, res) => {
             return res.status(403).json({ message: "Blacklisted Account" });
         }
 
-        if (user.password !== password) { 
-            return res.status(400).json({ message: "Invalid password" });
+        try {
+            const isMatch = await bcrypt.compare(password, user.password); 
+            
+            if (!isMatch) { 
+                return res.status(400).json({ message: "Invalid password" });
+            }
+
+            const userData = {
+                id: user.id,
+                name: user.name,
+                phone: user.phone,
+                email: user.email,
+                role: user.role,
+                status: user.status
+            };
+
+            const token = jwt.sign(userData, JWT_SECRET, { expiresIn: '1h' });
+
+            res.cookie('auth_token', token, {
+                httpOnly: true,
+                secure: false, 
+                maxAge: 60 * 60 * 1000, 
+                sameSite: 'lax',
+                path: '/'
+            });
+
+            return res.status(200).json({
+                success: true,
+                role: user.role,
+                user: userData
+            });
+
+        } catch (bcryptErr) {
+            return res.status(500).json({ message: "Error comparing passwords" });
         }
-
-        const userData = {
-            id: user.id,
-            name: user.name,
-            phone: user.phone,
-            email: user.email,
-            role: user.role,
-            status: user.status
-        };
-
-        const token = jwt.sign(userData, JWT_SECRET, { expiresIn: '1h' });
-
-        res.cookie('auth_token', token, {
-            httpOnly: true,
-            secure: false, 
-            maxAge: 60 * 60 * 1000, 
-            sameSite: 'lax',
-            path: '/'
-        });
-
-        return res.status(200).json({
-            success: true,
-            role: user.role,
-            user: userData
-        });
     });
 });
 
@@ -1316,9 +1335,18 @@ app.put('/api/user-node/update/:id', (req, res) => {
     }
 
     if (password && password.trim() !== "") {
+        
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+        if (!passwordRegex.test(password)) {
+            return res.status(400).json({ 
+                success: false, 
+                error: "Password must be at least 8 characters long, and include uppercase, lowercase, numbers, and special characters." 
+            });
+        }
+
         const sqlCheckUser = `SELECT password FROM users WHERE id = ?`;
         
-        db.query(sqlCheckUser, [userId], (err, results) => {
+        db.query(sqlCheckUser, [userId], async (err, results) => {
             if (err) {
                 console.error("Database Query Error:", err);
                 return res.status(500).json({ success: false, error: "Database error during validation." });
@@ -1329,19 +1357,29 @@ app.put('/api/user-node/update/:id', (req, res) => {
 
             const currentDbPassword = results[0].password;
 
-            if (oldPassword !== currentDbPassword) {
-                return res.status(400).json({ success: false, error: "Incorrect old password." });
-            }
-
-            const sqlUpdateWithPassword = `UPDATE users SET name = ?, phone = ?, email = ?, profile_photo = ?, password = ? WHERE id = ?`;
-            
-            db.query(sqlUpdateWithPassword, [name, phone, email, profile_photo, password, userId], (updateErr, result) => {
-                if (updateErr) {
-                    console.error("Profile Update Error:", updateErr);
-                    return res.status(500).json({ success: false, error: "Failed to write updates to Database Controller." });
+            try {
+                const isMatch = await bcrypt.compare(oldPassword, currentDbPassword);
+                if (!isMatch) {
+                    return res.status(400).json({ success: false, error: "Incorrect old password." });
                 }
-                return res.json({ success: true, message: "Profile and password updated successfully." });
-            });
+
+                const saltRounds = 10;
+                const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+                const sqlUpdateWithPassword = `UPDATE users SET name = ?, phone = ?, email = ?, profile_photo = ?, password = ? WHERE id = ?`;
+                
+                db.query(sqlUpdateWithPassword, [name, phone, email, profile_photo, hashedPassword, userId], (updateErr, result) => {
+                    if (updateErr) {
+                        console.error("Profile Update Error:", updateErr);
+                        return res.status(500).json({ success: false, error: "Failed to write updates to Database Controller." });
+                    }
+                    return res.json({ success: true, message: "Profile and password updated successfully." });
+                });
+
+            } catch (bcryptErr) {
+                console.error("Bcrypt Error:", bcryptErr);
+                return res.status(500).json({ success: false, error: "Internal server error during password encryption." });
+            }
         });
 
     } else {
@@ -1378,36 +1416,50 @@ app.get('/api/admins', (req, res) => {
 });
 
 // CREATE NEW ADMIN
-app.post('/api/admins', (req, res) => {
+app.post('/api/admins', async (req, res) => {
     const { name, email, phone, password } = req.body;
 
     if (!name || !email || !phone || !password) {
-        return res.status(400).json({ error: "Missing required fields." });
+        return res.status(400).json({ message: "Missing required fields." });
     }
 
-    const insertQuery = `
-        INSERT INTO users (name, email, phone, password, role, status, isBlacklisted) 
-        VALUES (?, ?, ?, ?, 'admin', 'Active', 0)
-    `;
+    try {
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    db.query(insertQuery, [name, email, phone, password], (insertErr, result) => {
-        if (insertErr) {
-            console.error(" SQL Insert Admin Error:", insertErr.message);
-            return res.status(500).json({ error: insertErr.message });
-        }
+        const insertQuery = `
+            INSERT INTO users (name, email, phone, password, role, status, isBlacklisted) 
+            VALUES (?, ?, ?, ?, 'admin', 'Active', 0)
+        `;
 
-        const selectQuery = "SELECT id, name, email, phone, role, status, isBlacklisted FROM users WHERE id = ?";
-        db.query(selectQuery, [result.insertId], (selectErr, rows) => {
-            if (selectErr) {
-                return res.status(500).json({ error: selectErr.message });
+        db.query(insertQuery, [name, email, phone, hashedPassword], (insertErr, result) => {
+            if (insertErr) {
+                console.error("SQL Insert Admin Error:", insertErr.message);
+                
+                if (insertErr.code === 'ER_DUP_ENTRY' || insertErr.message.toLowerCase().includes('duplicate')) {
+                    if (insertErr.message.toLowerCase().includes('email')) {
+                        return res.status(400).json({ message: "This email address is already registered." });
+                    }
+                    if (insertErr.message.toLowerCase().includes('phone')) {
+                        return res.status(400).json({ message: "This phone number is already registered." });
+                    }
+                }
+                return res.status(500).json({ message: insertErr.message });
             }
 
-            // Socket.io Broadcast: Broadcast newly designated administrative credentials
-            io.emit('admin_created', rows[0]);
-
-            res.status(201).json(rows[0]);
+            const selectQuery = "SELECT id, name, email, phone, role, status, isBlacklisted FROM users WHERE id = ?";
+            db.query(selectQuery, [result.insertId], (selectErr, rows) => {
+                if (selectErr) return res.status(500).json({ message: selectErr.message });
+                
+                io.emit('admin_created', rows[0]);
+                res.status(201).json(rows[0]);
+            });
         });
-    });
+
+    } catch (hashError) {
+        console.error("Bcrypt Hashing Error:", hashError);
+        return res.status(500).json({ message: "Internal server error during security encryption." });
+    }
 });
 
 // REVOKE ADMIN PROTOCOL
