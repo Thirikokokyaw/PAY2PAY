@@ -69,13 +69,13 @@ export default function AuthPage({ onLoginSuccess, onClose }) {
           if (data.message && data.message.toLowerCase().includes('email')) {
             setErrors(prev => ({ ...prev, email: data.message })); 
           } else {
-            alert("❌ " + data.message);
+            // alert("❌ " + data.message);
           }
         }
       } catch (error) {
         alert("Server connection failed.");
       }
-    } else {
+     } else {
   try {
     const response = await fetch('http://localhost:5000/api/login', {
       method: 'POST',
@@ -105,8 +105,7 @@ export default function AuthPage({ onLoginSuccess, onClose }) {
   } catch (error) {
     alert("Server connection failed.");
   }
-}
-  };
+}};
   return (
     <div className={`border rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl relative ${darkMode ? 'bg-slate-950 border-slate-800/60 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
       
@@ -182,9 +181,11 @@ export default function AuthPage({ onLoginSuccess, onClose }) {
               }} className="bg-transparent text-xs w-full focus:outline-none text-current placeholder-slate-400" />
             
           </div>
+          {/* {errors.email && <p className="text-[10px] text-rose-500 mt-1 font-medium">{errors.email}</p>}
+          {!isRegister && <span className="text-[9px] text-amber-600 dark:text-amber-300 mt-0.5 block"></span>} */}
           {errors.email && (
-    <p className="text-[10px] text-rose-500 mt-1 font-medium">{errors.email}</p>
-  )}
+            <p className="text-[10px] text-rose-500 mt-1 font-medium">{errors.email}</p>
+          )}
         </div>
 
         <div className={isRegister ? "grid grid-cols-2 gap-2" : "space-y-3"}>
@@ -224,7 +225,9 @@ export default function AuthPage({ onLoginSuccess, onClose }) {
           )}
           
         </div>
-        
+        {/* {isRegister && errors.password && (
+          <p className="text-[10px] text-rose-500 mt-1 font-medium">{errors.password}</p>
+        )} */}
 
         <button type="submit" className="w-full bg-amber-500 dark:bg-yellow-400 text-slate-950 font-bold py-2.5 rounded-lg hover:opacity-90 transition text-xs shadow-md mt-1.5 tracking-wide uppercase">
           {isRegister ? 'Create Account' : 'Sign In'}

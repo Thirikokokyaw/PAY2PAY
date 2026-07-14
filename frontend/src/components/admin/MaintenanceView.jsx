@@ -91,10 +91,25 @@ const handleToggleMaintenance = async () => {
         await refreshSettings();
       }
 
+      
       if (updatedFields.fee_rate !== undefined) {
-        alert(`Success: Service Fee Rate has been updated!.`);
+      const isDark = document.documentElement.classList.contains('dark') || (theme && theme.card && theme.card.includes('dark'));
 
+      Swal.fire({
+        title: 'Service fee has been updated!',
+        position: 'center',
+        showConfirmButton: false,
+        timer: 1000,
+        timerProgressBar: true,
+        background: isDark ? '#1e293b' : '#ffffff', 
+        color: isDark ? '#f8fafc' : '#0f172a',    
+        width: '280px', 
+        customClass: {
+        popup: `!rounded-xl border ${isDark ? 'border-slate-700/60 shadow-xl' : 'border-slate-200/80 shadow-lg'} !p-3.5`,
+        title: '!text-xs !font-bold !m-0 !py-1 !tracking-wide'
       }
+      });
+    }
 
       if (updatedFields.is_platform_online !== undefined) {
         const message = updatedFields.is_platform_online === 'N' 
