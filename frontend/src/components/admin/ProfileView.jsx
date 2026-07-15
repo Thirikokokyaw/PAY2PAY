@@ -67,7 +67,7 @@ export default function ProfileView({ theme, isDarkMode, adminData, setAdminData
         };
         await setAdminData(finalPayload);
         setToast({ show: true, message: "Profile update success", type: "success" });
-setTimeout(() => setToast({ show: false, message: '', type: '' }), 1000);
+        setTimeout(() => setToast({ show: false, message: '', type: '' }), 1000);
       }
       setIsEditing(false);
     } catch (err) {
@@ -111,39 +111,25 @@ setTimeout(() => setToast({ show: false, message: '', type: '' }), 1000);
           password: passwordForm.newPassword
         };
 
-        // Trigger setAdminData and wait for the response
         const response = await setAdminData(updatedPayload); 
 
-        // If backend returns a failure response object
         if (response && response.success === false) {
           if (response.error && response.error.toLowerCase().includes("old password")) {
             setOldPasswordError(response.error);
           } else {
-            alert(response.error || "Failed to change password.");
+            setConfirmPasswordError(response.error || "Failed to change password.");
           }
-          return;
+          return; 
         }
-        
-        // Success Actions
+
         setToast({ show: true, message: "Password change successful", type: "success" });
-setTimeout(() => setToast({ show: false, message: '', type: '' }), 1000);
+        setTimeout(() => setToast({ show: false, message: '', type: '' }), 1000);
         setIsPasswordModalOpen(false);
         setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
       }
     } catch (err) {
-      // Catch network or handler level errors
-      if (err.response && err.response.data && err.response.data.error) {
-        const errMsg = err.response.data.error;
-        if (errMsg.toLowerCase().includes("old password")) {
-          setOldPasswordError(errMsg);
-        } else {
-          alert(errMsg);
-        }
-      } else {
-        alert("Password updated successfully!");
-        setIsPasswordModalOpen(false);
-        setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
-      }
+      console.error("Password change handler level error:", err);
+      setConfirmPasswordError("Connection error. Please try again.");
     }
   };
   

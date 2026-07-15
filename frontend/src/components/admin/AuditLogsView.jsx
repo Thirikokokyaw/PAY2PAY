@@ -54,16 +54,11 @@ export default function AuditLogsView({ theme, isDarkMode }) {
     setFilteredLogs(filtered);
   }, [searchTerm, logs]);
 
-  const getStatusColor = (status) => {
-    if (status >= 200 && status < 300) return isDarkMode ? 'text-emerald-400' : 'text-emerald-600';
-    return isDarkMode ? 'text-rose-400' : 'text-rose-600';
-  };
-
   return (
-    <div className="p-4 space-y-4 max-w-7xl mx-auto h-screen max-h-[calc(100vh-32px)] flex flex-col overflow-hidden">
+    <div className="p-4 space-y-4 w-full h-auto flex flex-col flex-none">
       
       {/* Header section */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800 pb-3 flex-shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3 flex-shrink-0">
         <div className="flex items-center gap-2">
           <div className="p-1.5 bg-slate-900 border border-slate-800 rounded-lg text-slate-200">
             <ShieldAlert className="w-4 h-4" />
@@ -89,17 +84,18 @@ export default function AuditLogsView({ theme, isDarkMode }) {
       </div>
 
       {/* TABLE MAIN CONTAINER */}
-      <div className={`border rounded-xl flex flex-col flex-grow min-h-0 overflow-hidden ${
+      <div className={`border rounded-xl flex flex-col overflow-hidden ${
         isDarkMode ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-white'
       }`}>
-        
-        {/* Table Titles Header */}
-        <div className={`border-b text-[10px] font-bold tracking-wider uppercase flex-shrink-0 ${
-          isDarkMode ? 'bg-slate-900/60 border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-600'
-        }`}>
-          <table className="w-full text-left table-fixed">
-            <thead>
-              <tr>
+
+        <div className="overflow-y-auto max-h-[440px] scrollbar-thin">
+          <table className="w-full text-left table-fixed border-collapse">
+            
+            {/* Sticky Header */}
+            <thead className={`sticky top-0 z-10 ${
+              isDarkMode ? 'bg-slate-900 text-slate-300' : 'bg-slate-100 text-slate-600'
+            }`}>
+              <tr className="text-[10px] font-bold tracking-wider uppercase border-b border-slate-200 dark:border-slate-800">
                 <th className="py-2.5 px-4 w-[160px]"><div className="flex items-center gap-1"><Clock className="w-3 h-3" /> TIMESTAMP</div></th>
                 <th className="py-2.5 px-4 w-[180px]"><div className="flex items-center gap-1"><User className="w-3 h-3" /> ADMINISTRATOR</div></th>
                 <th className="py-2.5 px-4"><div className="flex items-center gap-1"><Terminal className="w-3 h-3" /> ACTION EXECUTION</div></th>
@@ -107,12 +103,8 @@ export default function AuditLogsView({ theme, isDarkMode }) {
                 <th className="py-2.5 px-4 w-[130px] text-right"><div className="flex items-center gap-1 justify-end"><Globe className="w-3 h-3" /> IP ADDRESS</div></th>
               </tr>
             </thead>
-          </table>
-        </div>
 
-        {/* Scrollable Table Row Items */}
-        <div className="overflow-y-auto flex-grow min-h-0">
-          <table className="w-full text-left table-fixed border-collapse">
+            {/* Body Content */}
             <tbody className={`divide-y text-xs ${isDarkMode ? 'divide-slate-800 text-slate-200' : 'divide-slate-200 text-slate-800'}`}>
               {filteredLogs.length === 0 ? (
                 <tr>
@@ -124,7 +116,6 @@ export default function AuditLogsView({ theme, isDarkMode }) {
                 filteredLogs.map((log, index) => {
                   let logData = {};
                   
-                  // Safe JSON String processing
                   if (log.message && typeof log.message === 'string') {
                     try { logData = JSON.parse(log.message); } catch (e) { logData = { action: log.message }; }
                   } else {
@@ -136,53 +127,51 @@ export default function AuditLogsView({ theme, isDarkMode }) {
                   const displayAdminEmail = logData?.adminEmail || log?.adminEmail || 'N/A';
                   let rawAction = logData?.action || log?.action || '';
 
-                
                   let readableAction = rawAction;
-const cleanUrl = rawAction.toLowerCase();
+                  const cleanUrl = rawAction.toLowerCase();
 
-if (cleanUrl.includes('settings/update') || cleanUrl.includes('settings')) {
-  readableAction = "Updated General Settings";
-} else if (cleanUrl.includes('rate/update') || cleanUrl.includes('rate')) {
-  readableAction = "Updated Exchange Rates";
-} else if (cleanUrl.includes('add-admin')) {
-  readableAction = "Added New Admin Account";
-} else if (cleanUrl.includes('change-password')) {
-  readableAction = "Changed Admin Password";
-} else if (cleanUrl.includes('user-node/update')) {
-  const userId = cleanUrl.split('/').pop() || '';
-  readableAction = `Updated User Profile (ID: ${userId})`;
-} else if (cleanUrl.includes('audit-logs')) {
-  readableAction = "Viewed Security Audit Logs";
-} else if (cleanUrl.includes('users')) {
-  readableAction = "Viewed Users List";
-} else if (cleanUrl.includes('approved-transactions')) {
-  readableAction = "Viewed Approved Transactions";
-} else if (cleanUrl.includes('pending-transactions')) {
-  readableAction = "Viewed Pending Transactions";
-} else if (cleanUrl.includes('approve-transaction')) {
-  readableAction = "Approved Transaction";
-} else if (cleanUrl.includes('wallets/update-details')) {
-  readableAction = "Updated Wallet Details";
-} else if (cleanUrl.includes('tickets/reply')) {
-  readableAction = "Replied to Support Ticket";
-} else if (cleanUrl.includes('tickets/close')) {
-  readableAction = "Closed Support Ticket";
-} else if (cleanUrl.includes('login')) {
-  readableAction = "Logged Into System";
-} else if (cleanUrl.includes('logout')) {
-  readableAction = "Logged Out From System";
-} else if (cleanUrl.includes('delete-admin')) {
-  readableAction = "Deleted Admin Account";
-} else if (cleanUrl.includes('ban-user')) {
-  readableAction = "Banned User Account";
-} else if (cleanUrl.includes('deposit')) {
-  readableAction = "Processed Deposit Request";
-} else if (cleanUrl.includes('withdraw')) {
-  readableAction = "Processed Withdrawal Request";
-} else {
- 
-  readableAction = rawAction.split('/').pop().replace(/-/g, ' ');
-}
+                  if (cleanUrl.includes('settings/update') || cleanUrl.includes('settings')) {
+                    readableAction = "Updated General Settings";
+                  } else if (cleanUrl.includes('rate/update') || cleanUrl.includes('rate')) {
+                    readableAction = "Updated Exchange Rates";
+                  } else if (cleanUrl.includes('add-admin')) {
+                    readableAction = "Added New Admin Account";
+                  } else if (cleanUrl.includes('change-password')) {
+                    readableAction = "Changed Admin Password";
+                  } else if (cleanUrl.includes('user-node/update')) {
+                    const userId = cleanUrl.split('/').pop() || '';
+                    readableAction = `Updated User Profile (ID: ${userId})`;
+                  } else if (cleanUrl.includes('audit-logs')) {
+                    readableAction = "Viewed Security Audit Logs";
+                  } else if (cleanUrl.includes('users')) {
+                    readableAction = "Viewed Users List";
+                  } else if (cleanUrl.includes('approved-transactions')) {
+                    readableAction = "Viewed Approved Transactions";
+                  } else if (cleanUrl.includes('pending-transactions')) {
+                    readableAction = "Viewed Pending Transactions";
+                  } else if (cleanUrl.includes('approve-transaction')) {
+                    readableAction = "Approved Transaction";
+                  } else if (cleanUrl.includes('wallets/update-details')) {
+                    readableAction = "Updated Wallet Details";
+                  } else if (cleanUrl.includes('tickets/reply')) {
+                    readableAction = "Replied to Support Ticket";
+                  } else if (cleanUrl.includes('tickets/close')) {
+                    readableAction = "Closed Support Ticket";
+                  } else if (cleanUrl.includes('login')) {
+                    readableAction = "Logged Into System";
+                  } else if (cleanUrl.includes('logout')) {
+                    readableAction = "Logged Out From System";
+                  } else if (cleanUrl.includes('delete-admin')) {
+                    readableAction = "Deleted Admin Account";
+                  } else if (cleanUrl.includes('ban-user')) {
+                    readableAction = "Banned User Account";
+                  } else if (cleanUrl.includes('deposit')) {
+                    readableAction = "Processed Deposit Request";
+                  } else if (cleanUrl.includes('withdraw')) {
+                    readableAction = "Processed Withdrawal Request";
+                  } else {
+                    readableAction = rawAction.split('/').pop().replace(/-/g, ' ');
+                  }
 
                   return (
                     <tr key={index} className={`transition-colors ${isDarkMode ? 'hover:bg-slate-900/40 text-slate-100' : 'hover:bg-slate-50 text-slate-900'}`}>
@@ -194,12 +183,11 @@ if (cleanUrl.includes('settings/update') || cleanUrl.includes('settings')) {
                         <div className="text-[10px] font-mono text-slate-500 mt-0.5">{displayAdminEmail}</div>
                       </td>
                       <td className="py-3 px-4 font-medium tracking-wide truncate">
-                        {readableAction}
+                        {readableAction} 
                       </td>
                       <td className="py-3 px-4 text-center font-mono font-bold text-[11px] w-[80px]">
-  
-  <span className="text-emerald-500">✔</span>
-</td>
+                        <span className="text-emerald-500">✔</span>
+                      </td>
                       <td className={`py-3 px-4 text-right font-mono text-[11px] w-[130px] ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                         {logData?.ip || log?.ip || '127.0.0.1'}
                       </td>

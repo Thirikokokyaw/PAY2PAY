@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { UserMinus, PlusCircle, RefreshCw, Loader2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
-
 export default function AdminManagementView({ theme, isDarkMode = false }) {
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,69 +30,80 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
     fetchAdmins(true);
   }, [fetchAdmins]);
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    fetchAdmins(false);
+  // Add Admin Function
+  const handleCreateAdmin = async (e) => {
+    e.preventDefault();
+    
+    let currentErrors = { email: '', phone: '', password: '' };
+    let hasError = false;
+
+    if (!newAdmin.name || !newAdmin.email || !newAdmin.phone || !newAdmin.password) return;
+
+    // 🔒 STRONG PASSWORD VALIDATION (REGEX)
+    // စည်းကမ်းချက်များ - အနည်းဆုံး ၈ လုံး၊ စာလုံးကြီး ၁ လုံး၊ စာလုံးသေး ၁ လုံး၊ ဂဏန်း ၁ လုံး နှင့် Special Character (@$!%*?&) ၁ လုံးပါရမည်။
+    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    
+    if (!strongPasswordRegex.test(newAdmin.password)) {
+      currentErrors.password = 'Password must be 8+ characters with uppercase, lowercase, number, and special character (@$!%*?&).';
+      hasError = true;
+    }
+
+    // Duplicate Check
+    const emailExists = admins.some(admin => admin.email.toLowerCase() === newAdmin.email.toLowerCase());
+    const phoneExists = admins.some(admin => admin.phone === newAdmin.phone);
+
+    if (emailExists) {
+      currentErrors.email = 'This email address is already registered.';
+      hasError = true;
+    }
+
+    if (phoneExists) {
+      currentErrors.phone = 'This phone number is already registered.';
+      hasError = true;
+    }
+
+    if (hasError) {
+      setErrors(currentErrors);
+      return;
+    }
+    
+    try {
+      const response = await fetch('http://localhost:5000/api/admins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAdmin)
+      });
+
+      const resData = await response.json();
+
+      if (response.ok) {
+        setAdmins(prev => [resData, ...prev]);
+        setNewAdmin({ name: '', email: '', phone: '', password: '', role: 'admin' });
+        setErrors({ email: '', phone: '', password: '' }); 
+        
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: 'Admin account secured and created!',
+          showConfirmButton: false,
+          timer: 2000
+        });
+      } else {
+        if (resData.message && resData.message.toLowerCase().includes('email')) {
+          setErrors(prev => ({ ...prev, email: resData.message }));
+        } else if (resData.message && resData.message.toLowerCase().includes('phone')) {
+          setErrors(prev => ({ ...prev, phone: resData.message }));
+        } else {
+          console.error("Server creation logic error:", resData.message);
+        }
+      }
+    } catch (error) {
+      console.error("Error creating admin:", error);
+    }
   };
 
-  // Add  Table မှာ 
-  const handleCreateAdmin = async (e) => {
-  e.preventDefault();
-  
-  let currentErrors = { email: '', phone: '', password: '' };
-  let hasError = false;
-
-  if (!newAdmin.name || !newAdmin.email || !newAdmin.phone || !newAdmin.password) return;
-
-  if (newAdmin.password.length < 8) {
-    currentErrors.password = 'Password must be at least 8 characters long.';
-    hasError = true;
-  }
-
-  const emailExists = admins.some(admin => admin.email.toLowerCase() === newAdmin.email.toLowerCase());
-  const phoneExists = admins.some(admin => admin.phone === newAdmin.phone);
-
-  if (emailExists) {
-    currentErrors.email = 'This email address is already registered.';
-    hasError = true;
-  }
-
-  if (phoneExists) {
-    currentErrors.phone = 'This phone number is already registered.';
-    hasError = true;
-  }
-
-  if (hasError) {
-    setErrors(currentErrors);
-    return;
-  }
-  
-  try {
-    const response = await fetch('http://localhost:5000/api/admins', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newAdmin)
-    });
-
-    const resData = await response.json();
-
-    if (response.ok) {
-      setAdmins(prev => [resData, ...prev]);
-      setNewAdmin({ name: '', email: '', phone: '', password: '', role: 'admin' });
-      setErrors({ email: '', phone: '', password: '' }); // Clear errors
-    } else {
-      if (resData.message && resData.message.toLowerCase().includes('email')) {
-        setErrors(prev => ({ ...prev, email: 'This email is already taken.' }));
-      } else if (resData.message && resData.message.toLowerCase().includes('phone')) {
-        setErrors(prev => ({ ...prev, phone: 'This phone number is already taken.' }));
-      }
-    }
-  } catch (error) {
-    console.error("Error creating admin:", error);
-  }
-};
-
-  // Revoke
+  // Revoke Access
   const handleRevokeAdmin = async (id, name, currentStatus) => {
     const isRevoked = currentStatus === 'Revoked';
 
@@ -123,14 +133,14 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
     if (!result.isConfirmed) return; 
 
     try {
-     const response = await fetch(`http://localhost:5000/api/admins/revoke/${id}`, {
-  method: 'PATCH',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    status: isRevoked ? 'Active' : 'Revoked',
-    isBlacklisted: isRevoked ? 0 : 1
-  })
-});
+      const response = await fetch(`http://localhost:5000/api/admins/revoke/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: isRevoked ? 'Active' : 'Revoked',
+          isBlacklisted: isRevoked ? 0 : 1
+        })
+      });
 
       if (response.ok) {
         setAdmins(prev => prev.map(admin => {
@@ -147,7 +157,6 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
     }
   };
 
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -155,10 +164,10 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
           <h2 className={`text-xl font-extrabold tracking-tight uppercase ${theme.textTitle}`}>Administrator Security & Roles</h2>
           <p className={`text-xs mt-1 ${theme.textMuted}`}>Control internal personnel access, assign roles, and toggle operational status routing.</p>
         </div>
-        
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start h-[calc(100vh-210px)]">        
+        {/* Create Admin Form */}
         <form onSubmit={handleCreateAdmin} className={`lg:col-span-4 border p-4 rounded-2xl flex flex-col justify-between h-full ${theme.card}`}>
           <h3 className="text-xs font-extrabold uppercase tracking-widest text-amber-500 flex items-center gap-2 mb-1">
             <PlusCircle size={15} /> Create Admin
@@ -182,24 +191,22 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
           </div>
 
           <div>
-            <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1">Password Key</label>
-            <input required type="password" placeholder="Enter a strong password" value={newAdmin.password} onChange={e=>{setNewAdmin({...newAdmin, password: e.target.value}); setErrors(p=>({...p, password:''}))}} className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none border ${errors.password ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500' : 'border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500'} ${theme.input}`} />
-            {errors.password && <p className="text-[10px] text-rose-500 font-semibold mt-0.5 pl-1">{errors.password}</p>}
+            <label className="block text-[10px] uppercase text-slate-400 font-bold mb-1">Password Key (Strong)</label>
+            <input required type="password" placeholder="e.g. Admin@1234" value={newAdmin.password} onChange={e=>{setNewAdmin({...newAdmin, password: e.target.value}); setErrors(p=>({...p, password:''}))}} className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none border ${errors.password ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500' : 'border-slate-300 dark:border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500'} ${theme.input}`} />
+            {errors.password && <p className="text-[10px] text-rose-500 font-semibold mt-0.5 pl-1 leading-relaxed">{errors.password}</p>}
           </div>
-
 
           <button type="submit" className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 rounded-xl text-xs font-black uppercase tracking-wider text-slate-950 transition-all shadow-lg shadow-amber-500/15 mt-2">
             Create Admin Account
           </button>
         </form>
 
-
+        {/* Admins Table List */}
         <div className={`lg:col-span-8 border rounded-2xl flex flex-col h-full overflow-hidden ${theme.tableBg}`}>
           <div className="overflow-x-auto overflow-y-auto h-full scrollbar-thin">
             {loading ? (
-              <div className={`lg:col-span-8 border rounded-2xl overflow-hidden flex flex-col max-h-[calc(100vh-220px)] ${theme.tableBg}`}>
-
-                <Loader2 className="animate-spin" size={24} />
+              <div className="flex flex-col items-center justify-center h-full p-8 space-y-2">
+                <Loader2 className="animate-spin text-amber-500" size={24} />
                 <p className="text-xs font-mono">Connecting Database Node...</p>
               </div>
             ) : (
@@ -237,21 +244,20 @@ export default function AdminManagementView({ theme, isDarkMode = false }) {
                         </td>
                         <td className="p-4 text-right">
                           <button
-                          onClick={() => handleRevokeAdmin(admin.id, admin.name, admin.status)}
-                          type="button"
-                          disabled={isSuperAdmin}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1 ml-auto transition-all ${
-                            isSuperAdmin
-                              ? 'opacity-30 cursor-not-allowed border-slate-200 text-slate-400' 
-                              : isRevoked
-                                ? 'bg-emerald-500/10 hover:bg-emerald-600 border-emerald-500/20 text-emerald-500 hover:text-white'
-                                : 'bg-rose-500/10 hover:bg-rose-600 border-rose-500/20 text-rose-500 hover:text-white'
-                          }`}
-                        >
-                          <UserMinus size={13} /> 
-                          {isRevoked ? 'Activate' : 'Revoke'}
-                        </button>
-
+                            onClick={() => handleRevokeAdmin(admin.id, admin.name, admin.status)}
+                            type="button"
+                            disabled={isSuperAdmin}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1 ml-auto transition-all ${
+                              isSuperAdmin
+                                ? 'opacity-30 cursor-not-allowed border-slate-200 text-slate-400' 
+                                : isRevoked
+                                  ? 'bg-emerald-500/10 hover:bg-emerald-600 border-emerald-500/20 text-emerald-500 hover:text-white'
+                                  : 'bg-rose-500/10 hover:bg-rose-600 border-rose-500/20 text-rose-500 hover:text-white'
+                            }`}
+                          >
+                            <UserMinus size={13} /> 
+                            {isRevoked ? 'Activate' : 'Revoke'}
+                          </button>
                         </td>
                       </tr>
                     );

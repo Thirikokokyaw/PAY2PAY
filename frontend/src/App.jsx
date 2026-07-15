@@ -151,25 +151,17 @@ useEffect(() => {
   try {
     const newPhoto = updatedData.profile_photo || updatedData.avatar;
     
+  
     const payload = {
       name: updatedData.name,
       phone: updatedData.phone,
       phone_number: updatedData.phone,
       email: updatedData.email,
       profile_photo: newPhoto,
-      oldPassword: updatedData.oldPassword,
-      password: updatedData.password 
+      oldPassword: updatedData.oldPassword, 
+      password: updatedData.password        
     };
 
-    // Update frontend state first
-    setUserInfo((prev) => ({
-      ...prev,
-      name: updatedData.name,
-      phone: updatedData.phone,
-      email: updatedData.email,
-      avatar: newPhoto,
-      profile_photo: newPhoto
-    }));
 
     const response = await fetch(`http://localhost:5000/api/user-node/update/${userInfo.id}`, {
       method: 'PUT',
@@ -192,9 +184,11 @@ useEffect(() => {
       await fetchDatabaseRecords(userInfo.id); 
       return { success: true }; 
     } else {
+     
       return { success: false, error: result.error || "Failed to update profile." };
     }
   } catch (err) {
+    console.error("Profile update error:", err);
     return { success: false, error: "Connection to database failed." };
   }
 };

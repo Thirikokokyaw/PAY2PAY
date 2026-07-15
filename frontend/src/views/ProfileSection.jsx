@@ -147,28 +147,29 @@ export default function ProfileSection({
   
   // Add this inside your ProfileSection component
   const handlePasswordSubmit = async (e) => {
-    e.preventDefault();
-    setOldPasswordError("");
-    setNewPasswordError("");
-    setConfirmPasswordError("");
+  e.preventDefault();
+  setOldPasswordError("");
+  setNewPasswordError("");
+  setConfirmPasswordError("");
+  
+  if (!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+    setToast({ show: true, message: "Please fill all password fields.", type: "error" });
+    setTimeout(() => setToast({ show: false, message: '', type: 'error' }), 1000);
+    return;
+  }
     
-    if (!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
-      setToast({ show: true, message: "Please fill all password fields.", type: "error" });
-      setTimeout(() => setToast({ show: false, message: '', type: 'error' }), 1000);
-      return;
-    }
-      
-    if (passwordForm.newPassword.length < 8) {
-      setNewPasswordError("Password must be at least 8 characters long.");
-      return;
-    }
+  if (passwordForm.newPassword.length < 8) {
+    setNewPasswordError("Password must be at least 8 characters long.");
+    return;
+  }
 
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setConfirmPasswordError("Confirm password does not match new password.");
-      return;
-    }
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    setConfirmPasswordError("Confirm password does not match new password.");
+    return;
+  }
 
-    if (setUserInfo) {
+  if (setUserInfo) {
+    try {
       const res = await setUserInfo({
         ...userInfo,
         name: editName,
@@ -176,7 +177,7 @@ export default function ProfileSection({
         email: editEmail,
         profile_photo: tempAvatar,
         oldPassword: passwordForm.oldPassword, 
-        password: passwordForm.newPassword
+        password: passwordForm.newPassword 
       });
 
       if (res && res.success) {
@@ -186,14 +187,18 @@ export default function ProfileSection({
         setToast({ show: true, message: "Password changed successfully.", type: "success" });
         setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 1000);
       } else {
-        if (res.error && res.error.toLowerCase().includes("old password")) {
+        if (res && res.error && res.error.toLowerCase().includes("old password")) {
           setOldPasswordError(res.error);
         } else {
-          setConfirmPasswordError(res.error || "An error occurred.");
+          setConfirmPasswordError((res && res.error) ? res.error : "Failed to change password.");
         }
       }
+    } catch (error) {
+      console.error("Password Submit Error:", error);
+      setConfirmPasswordError("Network link failed. Please try again.");
     }
-  };
+  }
+};
 useEffect(() => {
   const fetchTickets = async () => {
     try {
