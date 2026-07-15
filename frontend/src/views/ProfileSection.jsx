@@ -3,7 +3,7 @@ import { ThemeContext } from '../App';
 import { 
   Clock, ArrowRight, Camera, User, Phone, Mail, LogOut, 
   Pencil, RefreshCw, ArrowUpRight, ArrowDownLeft, Calendar, 
-  CheckCircle, Download, X, FileText, HelpCircle, Send, ShieldAlert, KeyRound
+  CheckCircle, Download, X, FileText, HelpCircle, Send, ShieldAlert, KeyRound, Bell
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { io } from 'socket.io-client';
@@ -50,11 +50,15 @@ export default function ProfileSection({
   });
 
   // Support Helpdesk States
-  const [fromPay, setFromPay] = useState('KPay');
-  const [toPay, setToPay] = useState('WaveMoney');
+  
+  const [wallets, setWallets] = useState([]);
+  const [fromPay, setFromPay] = useState('');
+  const [toPay, setToPay] = useState('');
   const [supportTxnNo, setSupportTxnNo] = useState('');
   const [supportMessage, setSupportMessage] = useState('');
-  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+ const [showSubmitAlert, setShowSubmitAlert] = useState(false);
+  const [hasNewReply, setHasNewReply] = useState(true);
   const [supportTickets, setSupportTickets] = useState([
     {
       id: "TKT-9941",
@@ -198,7 +202,7 @@ useEffect(() => {
       
       // Map database columns to match your UI expectation
       const formattedTickets = data.map(t => ({
-        id: `TXN-${t.id}`, // Assuming your DB ID is a number
+        id: `TXN-${t.id}`, 
         status: t.status,
         route: t.route,
         txn: t.txn_no,
@@ -218,6 +222,26 @@ useEffect(() => {
 }, [activeTab]); // Runs whenever the support tab is opened
 //end modified code
 
+//Fetch wallet date
+    useEffect(() => {
+      const fetchWallets = async () => {
+        try {
+          const response = await fetch('http://localhost:5000/api/wallets');
+          const data = await response.json();
+          setWallets(data);
+          if (data.length > 0) {
+            setFromPay(data[0].wallet_id);
+            setToPay(data[1] ? data[1].wallet_id : data[0].wallet_id); 
+          }
+        } catch (error) {
+          console.error("Error fetching wallets:", error);
+        }
+      };
+
+      fetchWallets();
+    }, []);
+
+
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -233,7 +257,11 @@ useEffect(() => {
   //modified code
   const handleSupportSubmit = async (e) => {
     e.preventDefault();
-    
+    if (!supportTxnNo || !supportMessage) {
+      alert("Please fill all fields.");
+      return;
+    }
+
     const ticketData = {
       userId: userInfo.id, 
       fromPay,
@@ -251,28 +279,35 @@ useEffect(() => {
 
       const result = await response.json();
       if (result.success) {
-        const clientTicket = {
-          id: `TKT-${result.ticketId || Math.floor(1000 + Math.random() * 9000)}`,
-          status: "Pending Review",
+        const newTicket = {
+          id: result.ticketId ? `TKT-${result.ticketId}` : `TKT-${Math.floor(10000 + Math.random() * 90000)}`, 
           route: `${fromPay} ➔ ${toPay}`,
           txn: supportTxnNo,
           userMsg: supportMessage,
-          sysReply: "Awaiting response..."
+          sysReply: "Awaiting response...",
+          status: "Pending",
+          created_at: new Date().toISOString()
         };
-        setSupportTickets(prev => [clientTicket, ...prev]);
+        
+        setSupportTickets(prev => [newTicket, ...prev]);
+        
+        setShowSubmitAlert(true);
+        setTimeout(() => {
+          setShowSubmitAlert(false);
+        }, 1500); 
 
+        // reset state values
         setSupportTxnNo('');
         setSupportMessage('');
-
-        setToast({ show: true, message: "Support Ticket submitted successfully.", type: "success" });
-        setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 1500);
+      } else {
+        alert(result.error || "Something went wrong.");
       }
     } catch (error) {
       console.error("Submission Error:", error);
-      setToast({ show: true, message: "Submission failed.", type: "error" });
-      setTimeout(() => setToast({ show: false, message: '', type: 'error' }), 1500);
+      alert("Failed to submit ticket. Please check backend connection.");
     }
   };
+
 
 const downloadVoucherHandle = async () => {
     const element = voucherRef.current;
@@ -477,26 +512,66 @@ const downloadVoucherHandle = async () => {
         )}
 
         {/* PROFILE MAIN OR EDIT COMPONENT */}
-        {activeTab === 'profile' && (
-          <>
-            {!isEditing ? (
-              <div className={`border rounded-3xl p-5 md:p-6 shadow-xl space-y-5 ${themeClasses.cardBg}`}>
-                <div className={`flex justify-between items-center pb-3 border-b ${themeClasses.borderSeparator}`}><h4 className={`text-xs font-bold uppercase tracking-wider ${themeClasses.textSub}`}>Recent Transactions (Today)</h4><button onClick={() => setActiveTab('history')} className={`text-[10px] font-bold uppercase border px-3 py-1.5 rounded-lg ${themeClasses.btnSecondary}`}>Older Records</button></div>
-                <div className="space-y-3">
-                  {recentTransactions.length === 0 ? (<div className={`text-center py-6 text-xs ${themeClasses.textSub}`}>No exchanges processed today.</div>) : (
-                    recentTransactions.map((txn) => {
-                      const statusMeta = getStatusDetails(txn.status);
-                      return (
-                        <div key={txn.txn_id} onClick={() => { setSelectedTxn(txn); setShowVoucher(true); }} className={`border p-4 rounded-xl flex justify-between items-center shadow-sm cursor-pointer ${themeClasses.innerCard}`}>
-                          <div><span className={`text-[10px] font-mono ${themeClasses.textMuted}`}>ID: {txn.txn_id} • {txn.created_at}</span><div className="flex items-center space-x-1.5 mt-1"><span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-700 border'}`}>{txn.from_wallet}</span><ArrowRight size={10} className={themeClasses.textMuted} /><span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${isDarkMode ? 'bg-slate-950 text-yellow-400' : 'bg-amber-50 text-amber-600'}`}>{txn.to_wallet}</span></div></div>
-                          <div className="text-right"><span className={`text-sm font-black block ${themeClasses.textMain}`}>{Number(txn.send_amount).toLocaleString()} MMK</span><span className="inline-block text-[9px] font-bold px-2 py-0.5 rounded mt-1" style={statusMeta.badgeStyle}>{statusMeta.label}</span></div>
-                        </div>
-                      );
-                    })
-                  )}
+       {activeTab === 'profile' && (
+  <>
+        {!isEditing ? (
+          <div className={`border rounded-3xl p-5 md:p-6 shadow-xl flex flex-col h-[333px] ${themeClasses.cardBg}`}>
+            <div className={`flex justify-between items-center pb-3 border-b ${themeClasses.borderSeparator} mb-4 shrink-0`}>
+              <h4 className={`text-xs font-bold uppercase tracking-wider ${themeClasses.textSub}`}>
+                Recent Transactions (Today)
+              </h4>
+              <button 
+                onClick={() => setActiveTab('history')} 
+                className={`text-[10px] font-bold uppercase border px-3 py-1.5 rounded-lg ${themeClasses.btnSecondary}`}
+              >
+                Older Records
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1 space-y-3 scrollbar-thin">
+              {recentTransactions.length === 0 ? (
+                <div className={`text-center py-12 text-xs ${themeClasses.textSub}`}>
+                  No exchanges processed today.
                 </div>
-              </div>
-            ) : (
+              ) : (
+                recentTransactions.map((txn) => {
+                  const statusMeta = getStatusDetails(txn.status);
+                  return (
+                    <div 
+                      key={txn.txn_id} 
+                      onClick={() => { setSelectedTxn(txn); setShowVoucher(true); }} 
+                      className={`border p-4 rounded-xl flex justify-between items-center shadow-sm cursor-pointer transition-all duration-150 ${themeClasses.innerCard}`}
+                    >
+                      <div>
+                        <span className={`text-[10px] font-mono ${themeClasses.textMuted}`}>
+                          ID: {txn.txn_id} • {txn.created_at}
+                        </span>
+                        <div className="flex items-center space-x-1.5 mt-1">
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-700 border'}`}>
+                            {txn.from_wallet}
+                          </span>
+                          <ArrowRight size={10} className={themeClasses.textMuted} />
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${isDarkMode ? 'bg-slate-950 text-yellow-400' : 'bg-amber-50 text-amber-600'}`}>
+                            {txn.to_wallet}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-black block ${themeClasses.textMain}`}>
+                          {Number(txn.send_amount).toLocaleString()} MMK
+                        </span>
+                        <span className="inline-block text-[9px] font-bold px-2 py-0.5 rounded mt-1" style={statusMeta.badgeStyle}>
+                          {statusMeta.label}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        ) : (
+
               /* EDIT PROFILE FORM COMPONENT */
               <form onSubmit={handleSaveChanges} className={`border rounded-3xl p-5 md:p-6 shadow-xl space-y-5 ${themeClasses.cardBg}`}>
                 <h4 className="text-xs font-bold uppercase tracking-wider text-amber-500">Edit Profile Details</h4>
@@ -537,96 +612,184 @@ const downloadVoucherHandle = async () => {
 
         {/*  HISTORICAL TRANSACTION HISTORY */}
         {activeTab === 'history' && (
-          <div className={`border rounded-3xl p-5 shadow-xl space-y-4 ${themeClasses.cardBg}`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-dashed border-slate-700/20">
-              <h4 className={`text-xs font-bold uppercase tracking-wider ${themeClasses.textSub}`}>Full Audit Records (Older)</h4>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className={`flex items-center border rounded-lg px-2 py-1 gap-1.5 ${themeClasses.inputBg}`}><Calendar size={12} /><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-transparent text-[10px] focus:outline-none" /></div>
-                <span className="text-[10px]">to</span>
-                <div className={`flex items-center border rounded-lg px-2 py-1 gap-1.5 ${themeClasses.inputBg}`}><Calendar size={12} /><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-transparent text-[10px] focus:outline-none" /></div>
+        <div className={`border rounded-3xl p-4 shadow-xl flex flex-col md:h-[430px] w-full max-h-[330px] overflow-hidden ${themeClasses.cardBg}`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2 border-b border-slate-500/10 mb-3 shrink-0">
+            <h4 className={`text-[11px] font-black uppercase tracking-wider ${themeClasses.textMain}`}>
+              Full Audit Records
+            </h4>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* Start Date Input */}
+              <div className={`flex items-center border rounded-lg px-2 py-0.5 gap-1 ${themeClasses.inputBg}`}>
+                <Calendar size={10} className="text-slate-400" />
+                <input 
+                  type="date" 
+                  value={startDate} 
+                  onChange={(e) => setStartDate(e.target.value)} 
+                  className="bg-transparent text-[9px] focus:outline-none py-0.5 font-mono" 
+                />
+              </div>
+              <span className="text-[9px] text-slate-400 font-bold">to</span>
+              <div className={`flex items-center border rounded-lg px-2 py-0.5 gap-1 ${themeClasses.inputBg}`}>
+                <Calendar size={10} className="text-slate-400" />
+                <input 
+                  type="date" 
+                  value={endDate} 
+                  onChange={(e) => setEndDate(e.target.value)} 
+                  className="bg-transparent text-[9px] focus:outline-none py-0.5 font-mono" 
+                />
               </div>
             </div>
-            
-            <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1 overflow-x-hidden">
-              {filteredHistoryTransactions.length === 0 ? (<div className="text-center py-12 text-xs">No older transactions match the filter.</div>) : (
-                filteredHistoryTransactions.map((txn) => {
-                  const statusMeta = getStatusDetails(txn.status);
-                  return (
-                    <div key={txn.txn_id} onClick={() => { setSelectedTxn(txn); setShowVoucher(true); }} className={`border p-4 rounded-xl flex justify-between items-center cursor-pointer transition-all duration-200 ${themeClasses.innerCard}`}>
-                      <div><span className={`text-[10px] font-mono ${themeClasses.textMuted}`}>ID: {txn.txn_id} • {txn.created_at}</span><div className="flex items-center space-x-2 mt-1"><span className="text-xs font-bold">{txn.from_wallet}</span><ArrowRight size={12} /><span className="text-xs font-bold text-amber-500">{txn.to_wallet}</span></div></div>
-                      <div className="text-right"><span className={`text-sm font-black ${themeClasses.textMain}`}>{Number(txn.send_amount).toLocaleString()} MMK</span><span className="block text-[9px] font-bold px-2 py-0.5 rounded mt-1" style={statusMeta.badgeStyle}>{statusMeta.label}</span></div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
           </div>
-        )}
+          
+          <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 min-h-0 scrollbar-thin">
+            {filteredHistoryTransactions.length === 0 ? (
+              <div className={`text-center py-12 text-xs ${themeClasses.textSub}`}>
+                No older transactions match the filter.
+              </div>
+            ) : (
+              filteredHistoryTransactions.map((txn) => {
+                const statusMeta = getStatusDetails(txn.status);
+                return (
+                  <div 
+                    key={txn.txn_id} 
+                    onClick={() => { setSelectedTxn(txn); setShowVoucher(true); }} 
+                    className={`border p-3 rounded-xl flex justify-between items-center cursor-pointer transition-all duration-150 ${themeClasses.innerCard}`}
+                  >
+                    <div>
+                      <span className={`text-[9px] font-mono ${themeClasses.textMuted}`}>
+                        ID: {txn.txn_id} • {txn.created_at}
+                      </span>
+                      <div className="flex items-center space-x-1.5 mt-0.5">
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-700 border'}`}>
+                          {txn.from_wallet}
+                        </span>
+                        <ArrowRight size={8} className={themeClasses.textMuted} />
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${isDarkMode ? 'bg-slate-950 text-yellow-400' : 'bg-amber-50 text-amber-600'}`}>
+                          {txn.to_wallet}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-xs font-black block ${themeClasses.textMain}`}>
+                        {Number(txn.send_amount).toLocaleString()} MMK
+                      </span>
+                      <span className="inline-block text-[8px] font-bold px-1.5 py-0.5 rounded mt-0.5" style={statusMeta.badgeStyle}>
+                        {statusMeta.label}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+        </div>
+      )}
+
 
         {/*  CUSTOM SUPPORT HELPDESK VIEW */}
         {activeTab === 'support' && (
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            <div className={`lg:col-span-3 border rounded-3xl p-5 shadow-xl space-y-4 h-fit ${themeClasses.cardBg}`}>
-              <div>
-                <h4 className={`text-xs font-bold uppercase tracking-wider ${themeClasses.textMain}`}>Support Helpdesk</h4>
-                <p className={`text-[11px] ${themeClasses.textSub}`}>Fill in the ticket form to report application issues.</p>
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start w-full lg:h-[430px]">
+            <form onSubmit={handleSupportSubmit} className={`lg:col-span-3 border rounded-3xl p-5 shadow-xl backdrop-blur-md flex flex-col justify-between h-full min-h-[440px] lg:min-h-0 ${themeClasses.cardBg}`}>
+              <div className="space-y-4 flex-1">
+                <div className={`pb-3 border-b ${themeClasses.borderSeparator}`}>
+                  <h4 className={`text-sm font-bold uppercase tracking-wider ${themeClasses.textMain}`}>Support Helpdesk</h4>
+                  <p className={`text-[11px] ${themeClasses.textSub}`}>Fill in the ticket form to report application issues.</p>
+                </div>
+                
+                <div className="space-y-3.5">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                  <label className={`block text-[10px] font-bold uppercase mb-1 ${themeClasses.textSub}`}>From</label>
+                  <select value={fromPay} onChange={(e) => setFromPay(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none ${themeClasses.inputBg}`}>
+                    {wallets.map((wallet) => (
+                      <option key={wallet.wallet_id} value={wallet.wallet_id}>
+                        {wallet.wallet_id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className={`block text-[10px] font-bold uppercase mb-1 ${themeClasses.textSub}`}>To</label>
+                  <select value={toPay} onChange={(e) => setToPay(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none ${themeClasses.inputBg}`}>
+                    {wallets.map((wallet) => (
+                      <option key={wallet.wallet_id} value={wallet.wallet_id}>
+                        {wallet.wallet_id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                  </div>
+                  <div>
+                    <label className={`block text-[10px] font-bold uppercase mb-1 ${themeClasses.textSub}`}>Transaction ID</label>
+                    <input type="text" placeholder="e.g. TXN-77210" required value={supportTxnNo} onChange={(e) => setSupportTxnNo(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none font-mono ${themeClasses.inputBg}`} />
+                  </div>
+                  <div>
+                    <label className={`block text-[10px] font-bold uppercase mb-1 ${themeClasses.textSub}`}>Describe Issue</label>
+                    <textarea rows="3" required placeholder="Type details..." value={supportMessage} onChange={(e) => setSupportMessage(e.target.value)} className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none resize-none ${themeClasses.inputBg}`}></textarea>
+                  </div>
+                </div>
               </div>
-              <form onSubmit={handleSupportSubmit} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={`block text-[9px] font-bold uppercase mb-1 ${themeClasses.textSub}`}>From</label>
-                    <select value={fromPay} onChange={(e) => setFromPay(e.target.value)} className={`w-full border rounded-lg px-2 py-2 text-xs focus:outline-none ${themeClasses.inputBg}`}>
-                      <option value="KPay">KBZPay</option>
-                      <option value="WaveMoney">WavePay</option>
-                      <option value="CBPay">CB Pay</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={`block text-[9px] font-bold uppercase mb-1 ${themeClasses.textSub}`}>To</label>
-                    <select value={toPay} onChange={(e) => setToPay(e.target.value)} className={`w-full border rounded-lg px-2 py-2 text-xs focus:outline-none ${themeClasses.inputBg}`}>
-                      <option value="WaveMoney">WavePay</option>
-                      <option value="KPay">KBZPay</option>
-                      <option value="CBPay">CB Pay</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className={`block text-[9px] font-bold uppercase mb-1 ${themeClasses.textSub}`}>Transaction ID</label>
-                  <input type="text" placeholder="e.g. TXN-77210" required value={supportTxnNo} onChange={(e) => setSupportTxnNo(e.target.value)} className={`w-full border rounded-lg px-2 py-2 text-xs focus:outline-none font-mono ${themeClasses.inputBg}`} />
-                </div>
-                <div>
-                  <label className={`block text-[9px] font-bold uppercase mb-1 ${themeClasses.textSub}`}>Describe Issue</label>
-                  <textarea rows="2" required placeholder="Type details..." value={supportMessage} onChange={(e) => setSupportMessage(e.target.value)} className={`w-full border rounded-lg px-2 py-1.5 text-xs focus:outline-none ${themeClasses.inputBg}`}></textarea>
-                </div>
-                <button type="submit" className="w-full px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 uppercase shadow-md">
-                  <Send size={12} /> Send Ticket
+              
+              <div className={`pt-4 border-t ${themeClasses.borderSeparator} mt-4`}>
+                <button type="submit" className="w-full px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 text-xs font-bold rounded-xl flex items-center justify-center uppercase shadow-md active:scale-95 transition-all">
+                  Send Ticket
                 </button>
-              </form>
-            </div>
+              </div>
+            </form>
+
             
             {/* ACTIVE TICKETS CONTAINER */}
-            <div className={`lg:col-span-2 border rounded-3xl p-5 shadow-xl space-y-3 flex flex-col ${themeClasses.cardBg}`}>
-              <h4 className={`text-xs font-bold uppercase tracking-wider ${themeClasses.textMain}`}>Active Tickets</h4>
-              <div className="space-y-3 overflow-y-auto max-h-[300px] lg:max-h-[400px]">
-                {supportTickets.map((ticket) => (
-                  <div key={ticket.id} className={`p-3.5 border rounded-xl space-y-2 text-[11px] font-medium shadow-sm ${themeClasses.innerCard}`}>
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-amber-500 font-mono text-xs">{ticket.id}</span>
-                      <span className="px-2 py-0.5 rounded text-[9px] font-bold" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#f5980b' }}>{ticket.status}</span>
+            <div className={`lg:col-span-2 border rounded-3xl p-5 shadow-xl backdrop-blur-md flex flex-col overflow-hidden h-full ${themeClasses.cardBg}`}>
+          <div className={`pb-3 border-b ${themeClasses.borderSeparator} mb-3 flex items-center justify-between`}>
+            <h4 className={`text-sm font-bold uppercase tracking-wider ${themeClasses.textMain}`}>Active Tickets</h4>
+            {supportTickets.some(t => t.sysReply && t.sysReply !== "Awaiting response...") && (
+              <div className="flex items-center gap-1">                
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+                </span>                
+                <Bell size={14} className="text-amber-500 animate-pulse" />
+              </div>
+            )}
+          </div>
+              
+              <div className="flex-1 overflow-y-auto pr-1 space-y-3 max-h-[300px] lg:max-h-none scrollbar-thin">
+                {supportTickets.length === 0 ? (
+                  <div className={`text-center py-12 text-xs ${themeClasses.textSub}`}>No active tickets submitted.</div>
+                ) : (
+                  supportTickets.map((ticket) => (
+                    <div key={ticket.id} className={`border p-3 rounded-xl text-left space-y-2 transition-all ${themeClasses.innerCard}`}>
+                      
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-black font-mono text-amber-500">{ticket.id}</span>
+                        </div>
+                        <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
+                          ticket.status === 'Resolved' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                        }`}>{ticket.status}</span>
+                      </div>
+
+                      <div>
+                        <p className={`text-[11px] font-black ${themeClasses.textMain}`}>{ticket.route}</p>
+                        <p className="text-[9px] text-slate-400 font-mono mt-0.5">Txn: {ticket.txn}</p>
+                      </div>
+                      <p className={`text-[11px] leading-relaxed italic ${themeClasses.textSub}`}>"{ticket.userMsg}"</p>
+                      
+                      <div className={`pt-2 border-t mt-1 p-2 rounded-lg text-[10px] space-y-0.5 ${isDarkMode ? 'bg-slate-950/60 border-slate-800 text-emerald-400' : 'bg-slate-50 border-slate-200 text-emerald-700'}`}>
+                        <span className="font-extrabold uppercase text-[9px] tracking-wider text-slate-400 block">Admin Reply:</span>
+                        <p>{ticket.sysReply}</p>
+                      </div>
                     </div>
-                    <div className="font-bold text-[10px]">{ticket.route} <span className="font-mono font-normal block text-[9px] opacity-60">Txn: {ticket.txn}</span></div>
-                    <p className={themeClasses.textSub}>{ticket.userMsg}</p>
-                    <div className={`p-2 rounded-lg text-[10px] ${isDarkMode ? 'bg-slate-900 border border-slate-800 text-cyan-400' : 'bg-slate-100 text-slate-700'}`}>
-                      <span className="font-bold block text-[9px] uppercase tracking-wider mb-0.5 opacity-75">Admin Reply:</span>
-                      {ticket.sysReply}
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
         )}
       </div>
+
 
       {/*  DOWNLOADABLE VOUCHER MODAL */}
       {showVoucher && selectedTxn && (
