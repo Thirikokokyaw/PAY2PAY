@@ -5,6 +5,8 @@ import Swal from 'sweetalert2';
 export default function WalletSettingsView({ theme, isDarkMode = false, onWalletUpdated }) {
   const [wallets, setWallets] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [createErrors, setCreateErrors] = useState({});
+  const [editErrors, setEditErrors] = useState({});
   
   // Backend Base URL for Images
   const BACKEND_URL = 'http://localhost:5000';
@@ -50,10 +52,23 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
 
   const handleInputChange = (e, isCreateForm = false) => {
     const { name, value } = e.target;
-    if (isCreateForm) {
+    
+    let error = "";
+    if (name === 'wallet_id' || name === 'wallet_name') {
+      if (value.trim() === "") error = "This field is required.";
+      else if (!/^[A-Za-z\s]+$/.test(value)) error = "Only alphabet letters are allowed.";
+    }
+    if (name === 'account_number') {
+      const numDigits = value.replace(/\D/g, '').length;
+      if (value.trim() === "") error = "Account/Phone number is required.";
+      else if (numDigits !== 10 && numDigits !== 11) error = "Must be exactly 10 or 11 digits.";
+    }
+   if (isCreateForm) {
       setCreateForm(prev => ({ ...prev, [name]: value }));
+      setCreateErrors(prev => ({ ...prev, [name]: error }));
     } else {
       setEditForm(prev => ({ ...prev, [name]: value }));
+      setEditErrors(prev => ({ ...prev, [name]: error }));
     }
   };
 
@@ -75,11 +90,23 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
   const handleCreateWalletSubmit = async (e) => {
     e.preventDefault();
 
-    // Check if QR stream is present
-    if (!createForm.qr_code_path) {
-      alert("Please Upload Your QR Stream!");
+   if (!createForm.qr_code_path) {
+      Swal.fire({
+        text: "Please Upload Your QR Stream!",
+        position: 'center',
+        showConfirmButton: false,
+        timer: 2000,
+        background: '#1e293b', 
+        color: '#ffffff',     
+        width: 'auto',
+        customClass: {
+          popup: '!rounded-xl !p-4 !text-xs !font-medium !shadow-2xl text-center !z-[999999]',
+          htmlContainer: '!m-0'
+        }
+      });
       return;
     }
+
 
     try {
       const response = await fetch(`${BACKEND_URL}/api/wallets/create`, {
@@ -88,6 +115,7 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
         body: JSON.stringify(createForm),
       });
       const data = await response.json();
+      
       if (data.success) {
         setIsCreateModalOpen(false);
         setCreateForm({
@@ -95,6 +123,20 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
           qr_code_path: '', current_balance: 1500000, limit_warning: 5000000, is_active: 'Y'
         });
         fetchWalletsFromDatabase(false);
+
+        Swal.fire({
+          text: "Wallet Created Successfully!",
+          position: 'center',
+          showConfirmButton: false,
+          timer: 2000,
+          background: '#1e293b', 
+          color: '#ffffff',     
+          width: 'auto',
+          customClass: {
+            popup: '!rounded-xl !p-4 !text-xs !font-medium !shadow-2xl text-center !z-[999999]',
+            htmlContainer: '!m-0'
+          }
+        });
       }
     } catch (err) {
       console.error("Error creating wallet:", err);
@@ -121,6 +163,20 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
         
         setEditingWallet(null);
         fetchWalletsFromDatabase(false);
+
+        Swal.fire({
+          text: "Changes Saved Successfully!",
+          position: 'center',
+          showConfirmButton: false,
+          timer: 2000,
+          background: '#1e293b', 
+          color: '#ffffff',     
+          width: 'auto',
+          customClass: {
+            popup: '!rounded-xl !p-4 !text-xs !font-medium !shadow-2xl text-center !z-[999999]',
+            htmlContainer: '!m-0'
+          }
+        });
       }
     } catch (err) {
       console.error("Database or COBOL updates failed:", err);
@@ -330,10 +386,12 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
                 <div className="space-y-1">
                   <label className="block font-bold text-slate-400">Wallet Primary Code (ID)</label>
                   <input type="text" name="wallet_id" required placeholder="e.g., AYAPay" value={createForm.wallet_id} onChange={(e) => handleInputChange(e, true)} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl font-mono uppercase focus:border-amber-500 focus:outline-none" />
+                  {createErrors.wallet_id && <p className="text-rose-500 text-[11px] mt-0.5 font-sans font-medium">{createErrors.wallet_id}</p>}
                 </div>
                 <div className="space-y-1">
                   <label className="block font-bold text-slate-400">Custom Display Name</label>
                   <input type="text" name="wallet_name" required placeholder="e.g., AYA Pay Main" value={createForm.wallet_name} onChange={(e) => handleInputChange(e, true)} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl focus:border-amber-500 focus:outline-none" />
+                  {createErrors.wallet_name && <p className="text-rose-500 text-[11px] mt-0.5 font-sans font-medium">{createErrors.wallet_name}</p>}
                 </div>
               </div>
 
@@ -341,6 +399,7 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
                 <div className="space-y-1">
                   <label className="block font-bold text-slate-400">Account / Phone Number</label>
                   <input type="text" name="account_number" required placeholder="09xxxxxxxx" value={createForm.account_number} onChange={(e) => handleInputChange(e, true)} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl font-mono focus:border-amber-500 focus:outline-none" />
+                  {createErrors.account_number && <p className="text-rose-500 text-[11px] mt-0.5 font-sans font-medium">{createErrors.account_number}</p>}
                 </div>
                 <div className="space-y-1">
                   <label className="block font-bold text-slate-400">Registered Holder</label>
@@ -405,6 +464,7 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
                 <div className="space-y-1">
                   <label className="block font-bold text-slate-400">Display Router Name</label>
                   <input type="text" name="wallet_name" required value={editForm.wallet_name} onChange={handleInputChange} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl focus:border-amber-500 focus:outline-none" />
+                  {editErrors.wallet_name && <p className="text-rose-500 text-[11px] mt-0.5 font-sans font-medium">{editErrors.wallet_name}</p>}
                 </div>
               </div>
 
@@ -412,6 +472,7 @@ export default function WalletSettingsView({ theme, isDarkMode = false, onWallet
                 <div className="space-y-1">
                   <label className="block font-bold text-slate-400">Account / Phone Mapping</label>
                   <input type="text" name="account_number" required value={editForm.account_number} onChange={handleInputChange} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl font-mono focus:border-amber-500 focus:outline-none" />
+                  {editErrors.account_number && <p className="text-rose-500 text-[11px] mt-0.5 font-sans font-medium">{editErrors.account_number}</p>}
                 </div>
                 <div className="space-y-1">
                   <label className="block font-bold text-slate-400">Account Holder Title</label>

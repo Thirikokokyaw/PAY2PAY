@@ -23,6 +23,7 @@ export default function ProfileSection({
   const [isEditing, setIsEditing] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const today = new Date().toISOString().split('T')[0];
 
   // Local state to manage live transaction modifications
   const [liveTransactions, setLiveTransactions] = useState(userTransactions);
@@ -43,6 +44,7 @@ export default function ProfileSection({
   const [oldPasswordError, setOldPasswordError] = useState("");
   const [newPasswordError, setNewPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [passwordForm, setPasswordForm] = useState({
     oldPassword: '',
     newPassword: '',
@@ -369,32 +371,58 @@ const downloadVoucherHandle = async () => {
 
 //end modified code
 
+  // const getStatusDetails = (statusCode) => {
+  //   switch (String(statusCode)) {
+  //     case "1":
+  //       return { 
+  //         label: "Approved", 
+  //         badgeStyle: { backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.2)' },
+  //         heading: "TRANSACTION SUCCESSFUL",
+  //         note: "Thank you for exchanging with us! Your funds have been successfully transferred to the target wallet.",
+  //         colorClass: "text-emerald-500"
+  //       };
+  //     case "2":
+  //       return { 
+  //         label: "Rejected", 
+  //         badgeStyle: { backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)' },
+  //         heading: "TRANSACTION REJECTED",
+  //         note: "We are sorry, but this transaction was cancelled or declined. Please check your transaction details and try again.",
+  //         colorClass: "text-rose-500"
+  //       };
+  //     case "0":
+  //     default:
+  //       return { 
+  //         label: "Pending", 
+  //         badgeStyle: { backgroundColor: 'rgba(245, 152, 11, 0.1)', color: '#f5980b', border: '1px solid rgba(245, 152, 11, 0.2)' },
+  //         heading: "TRANSACTION PENDING",
+  //         note: "Processing... Please wait a few moments.",
+  //         colorClass: "text-amber-500"
+  //       };
+  //   }
+  // };
   const getStatusDetails = (statusCode) => {
     switch (String(statusCode)) {
       case "1":
         return { 
           label: "Approved", 
           badgeStyle: { backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.2)' },
-          heading: "TRANSACTION SUCCESSFUL",
-          note: "Thank you for exchanging with us! Your funds have been successfully transferred to the target wallet.",
-          colorClass: "text-emerald-500"
+          canvasColor: "#10b981", 
+          text: "TRANSFER SUCCESSFUL" 
         };
       case "2":
         return { 
           label: "Rejected", 
           badgeStyle: { backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)' },
-          heading: "TRANSACTION REJECTED",
-          note: "We are sorry, but this transaction was cancelled or declined. Please check your transaction details and try again.",
-          colorClass: "text-rose-500"
+          canvasColor: "#ef4444", 
+          text: "TRANSACTION REJECTED" 
         };
       case "0":
       default:
         return { 
           label: "Pending", 
           badgeStyle: { backgroundColor: 'rgba(245, 152, 11, 0.1)', color: '#f5980b', border: '1px solid rgba(245, 152, 11, 0.2)' },
-          heading: "TRANSACTION PENDING",
-          note: "Processing... Please wait a few moments.",
-          colorClass: "text-amber-500"
+          canvasColor: "#f5980b", 
+          text: "TRANSACTION PENDING" 
         };
     }
   };
@@ -502,6 +530,19 @@ const downloadVoucherHandle = async () => {
         
         <div className={`pt-4 border-t ${themeClasses.borderSeparator} mt-4`}><button onClick={() => setIsLogoutModalOpen(true)} className="w-full text-xs bg-rose-500/10 border text-rose-500 py-2.5 rounded-xl transition font-bold flex items-center justify-center gap-2"><LogOut size={14}/> Logout</button></div>
       </div>
+
+      {/* SCREEN POPUP ALERT (APPEARS FOR 2 SECONDS) */}
+      {showSubmitAlert && (
+        <div className="fixed inset-0 flex items-center justify-center z-[9999] pointer-events-none">
+          <div className={`px-6 py-4 rounded-xl shadow-2xl border text-sm font-semibold tracking-wide backdrop-blur-md transform scale-100 transition-all duration-350 ${
+            isDarkMode 
+              ? 'bg-slate-900 border-amber-500/30 text-amber-400' 
+              : 'bg-white border-slate-200 text-slate-800 shadow-xl' 
+          }`}>
+            Ticket submitted successfully
+          </div>
+        </div>
+      )}
 
       {/* MAIN INTERACTIVE VIEWPORT */}
       <div className="md:col-span-3 space-y-6 w-full">
@@ -615,81 +656,82 @@ const downloadVoucherHandle = async () => {
           </>
         )}
 
-        {/*  HISTORICAL TRANSACTION HISTORY */}
+        {/* HISTORICAL TRANSACTION HISTORY */}
         {activeTab === 'history' && (
-        <div className={`border rounded-3xl p-4 shadow-xl flex flex-col md:h-[430px] w-full max-h-[330px] overflow-hidden ${themeClasses.cardBg}`}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2 border-b border-slate-500/10 mb-3 shrink-0">
-            <h4 className={`text-[11px] font-black uppercase tracking-wider ${themeClasses.textMain}`}>
-              Full Audit Records
-            </h4>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {/* Start Date Input */}
-              <div className={`flex items-center border rounded-lg px-2 py-0.5 gap-1 ${themeClasses.inputBg}`}>
-                <Calendar size={10} className="text-slate-400" />
-                <input 
-                  type="date" 
-                  value={startDate} 
-                  onChange={(e) => setStartDate(e.target.value)} 
-                  className="bg-transparent text-[9px] focus:outline-none py-0.5 font-mono" 
-                />
-              </div>
-              <span className="text-[9px] text-slate-400 font-bold">to</span>
-              <div className={`flex items-center border rounded-lg px-2 py-0.5 gap-1 ${themeClasses.inputBg}`}>
-                <Calendar size={10} className="text-slate-400" />
-                <input 
-                  type="date" 
-                  value={endDate} 
-                  onChange={(e) => setEndDate(e.target.value)} 
-                  className="bg-transparent text-[9px] focus:outline-none py-0.5 font-mono" 
-                />
+          <div className={`border rounded-3xl p-5 md:p-6 shadow-xl flex flex-col h-[440px] ${themeClasses.cardBg}`}>
+            
+            <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b ${themeClasses.borderSeparator} mb-4 shrink-0`}>
+              <h4 className={`text-xs font-bold uppercase tracking-wider ${themeClasses.textSub}`}>
+                Full Audit Records (Older)
+              </h4>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className={`flex items-center border rounded-lg px-2 py-1 gap-1.5 ${themeClasses.inputBg}`}>
+                  <Calendar size={12} />
+                  <input 
+                    type="date" 
+                    value={startDate} 
+                    max={today} // Add this
+                    onChange={(e) => setStartDate(e.target.value)} 
+                    className="bg-transparent text-[10px] focus:outline-none" 
+                  />
+                </div>
+                <span className="text-[10px]">to</span>
+                <div className={`flex items-center border rounded-lg px-2 py-1 gap-1.5 ${themeClasses.inputBg}`}>
+                  <Calendar size={12} />
+                  <input 
+                    type="date" 
+                    value={endDate} 
+                    max={today} // Add this
+                    onChange={(e) => setEndDate(e.target.value)} 
+                    className="bg-transparent text-[10px] focus:outline-none" 
+                  />
+                </div>
               </div>
             </div>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 min-h-0 scrollbar-thin">
-            {filteredHistoryTransactions.length === 0 ? (
-              <div className={`text-center py-12 text-xs ${themeClasses.textSub}`}>
-                No older transactions match the filter.
-              </div>
-            ) : (
-              filteredHistoryTransactions.map((txn) => {
-                const statusMeta = getStatusDetails(txn.status);
-                return (
-                  <div 
-                    key={txn.txn_id} 
-                    onClick={() => { setSelectedTxn(txn); setShowVoucher(true); }} 
-                    className={`border p-3 rounded-xl flex justify-between items-center cursor-pointer transition-all duration-150 ${themeClasses.innerCard}`}
-                  >
-                    <div>
-                      <span className={`text-[9px] font-mono ${themeClasses.textMuted}`}>
-                        ID: {txn.txn_id} • {txn.created_at}
-                      </span>
-                      <div className="flex items-center space-x-1.5 mt-0.5">
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-700 border'}`}>
-                          {txn.from_wallet}
+            
+            <div className="flex-1 overflow-y-auto pr-1 space-y-3 scrollbar-thin">
+              {filteredHistoryTransactions.length === 0 ? (
+                <div className={`text-center py-12 text-xs ${themeClasses.textSub}`}>
+                  No older transactions match the filter.
+                </div>
+              ) : (
+                filteredHistoryTransactions.map((txn) => {
+                  const statusMeta = getStatusDetails(txn.status);
+                  return (
+                    <div 
+                      key={txn.txn_id} 
+                      onClick={() => { setSelectedTxn(txn); setShowVoucher(true); }} 
+                      className={`border p-4 rounded-xl flex justify-between items-center cursor-pointer transition-all duration-150 ${themeClasses.innerCard}`}
+                    >
+                      <div>
+                        <span className={`text-[10px] font-mono ${themeClasses.textMuted}`}>
+                          ID: {txn.txn_id} • {txn.created_at}
                         </span>
-                        <ArrowRight size={8} className={themeClasses.textMuted} />
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${isDarkMode ? 'bg-slate-950 text-yellow-400' : 'bg-amber-50 text-amber-600'}`}>
-                          {txn.to_wallet}
+                        <div className="flex items-center space-x-1.5 mt-1">
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-700 border'}`}>
+                            {txn.from_wallet}
+                          </span>
+                          <ArrowRight size={10} className={themeClasses.textMuted} />
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${isDarkMode ? 'bg-slate-950 text-yellow-400' : 'bg-amber-50 text-amber-600'}`}>
+                            {txn.to_wallet}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-black block ${themeClasses.textMain}`}>
+                          {Number(txn.send_amount).toLocaleString()} MMK
+                        </span>
+                        <span className="inline-block text-[9px] font-bold px-2 py-0.5 rounded mt-1" style={statusMeta.badgeStyle}>
+                          {statusMeta.label}
                         </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span className={`text-xs font-black block ${themeClasses.textMain}`}>
-                        {Number(txn.send_amount).toLocaleString()} MMK
-                      </span>
-                      <span className="inline-block text-[8px] font-bold px-1.5 py-0.5 rounded mt-0.5" style={statusMeta.badgeStyle}>
-                        {statusMeta.label}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
           </div>
-
-        </div>
-      )}
+        )}
 
 
         {/*  CUSTOM SUPPORT HELPDESK VIEW */}
@@ -818,18 +860,33 @@ const downloadVoucherHandle = async () => {
             >
               {/* Status Header Block */}
               <div className="text-center space-y-2">
-                {/* Lucide SVGs with clean CSS checkmarks to stop html2canvas from crashing */}
                 <div className="flex justify-center">
-                  {String(selectedTxn.status) === "1" ? (
-                    <div className="w-12 h-12 bg-emerald-500/10 rounded-full border border-emerald-500/30 flex items-center justify-center text-emerald-500 font-bold text-lg">
-                      ✓
-                    </div>
-                  ) : (
-                    <div className="w-12 h-12 bg-rose-500/10 rounded-full border border-rose-500/30 flex items-center justify-center text-rose-500 font-bold text-lg">
-                      ✕
-                    </div>
-                  )}
+                  {(() => {
+                    const status = String(selectedTxn.status);
+
+                    if (status === '0') return (
+                      <div className="flex flex-col items-center gap-2">
+                        {/* <div className="w-12 h-12 bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 font-bold text-lg">⏳</div> */}
+                        <span className="text-xs font-bold text-amber-500">Transaction Pending</span>
+                      </div>
+                    );
+
+                    if (status === '1') return (
+                      <div className="flex flex-col items-center gap-2">
+                        {/* <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-500 font-bold text-lg">✓</div> */}
+                        <span className="text-xs font-bold text-emerald-500">Transaction Successful</span>
+                      </div>
+                    );
+
+                    return (
+                      <div className="flex flex-col items-center gap-2">
+                        {/* <div className="w-12 h-12 bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-500 font-bold text-lg">✕</div> */}
+                        <span className="text-xs font-bold text-rose-500">Cancelled</span>
+                      </div>
+                    );
+                  })()}
                 </div>
+                
                 <h3 className={`text-sm font-black tracking-wider ${getStatusDetails(selectedTxn.status).colorClass}`}>
                   {getStatusDetails(selectedTxn.status).heading}
                 </h3>

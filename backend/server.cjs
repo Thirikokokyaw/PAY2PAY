@@ -326,143 +326,21 @@ app.get('/api/rates/:id', async (req, res) => {
 });
 
 // TRANSACTION check COBOL
-// app.post('/api/exchange/submit', async (req, res) => {
-//     console.log("=== Received Request Body ===", req.body);
-    
-//     let connection;
-//     try {
-//         const {
-//             fromWallet,
-//             toWallet,
-//             amount,
-//             txnIdTail,
-//             senderPhone,
-//             receiverPhone,
-//             senderName,
-//             receiverName,
-//             userId
-//         } = req.body;
-
-//         if (!fromWallet || !toWallet || !amount || !txnIdTail || !senderPhone || !receiverPhone) {
-//             return res.status(400).json({ success: false, message: 'Required fields are missing.' });
-//         }
-
-//         connection = await db.promise().getConnection();
-//         await connection.beginTransaction();
-
-//         const [wallets] = await connection.query(
-//             'SELECT wallet_id, wallet_name, is_active, current_balance FROM wallets WHERE wallet_id IN (?, ?)',
-//             [fromWallet, toWallet]
-//         );
-
-//         const sourceWallet = wallets.find(w => w.wallet_id === fromWallet);
-
-//         if (!sourceWallet) {
-//             await connection.rollback();
-//             return res.status(400).json({ success: false, message: 'Source (From) wallet not found in system.' });
-//         }
-
-//         const [rateRows] = await connection.query(
-//             'SELECT fee_rate FROM rates WHERE id = 1'
-//         );
-
-//         let currentFeeRate = 2; 
-//         if (rateRows.length > 0) {
-//             currentFeeRate = parseInt(rateRows[0].fee_rate, 10) || 0; 
-//         }
-
-//         const numericAmount = parseInt(amount, 10);
-//         const availableBalance = parseInt(sourceWallet.current_balance, 10) || 0;
-
-//         console.log(`[Debug Log] Parsed Integer - Amount: ${numericAmount}, Wallet Balance: ${availableBalance}`);
-
-//         const cobolArgs = `VALIDATE_TXN,${numericAmount},${availableBalance},${txnIdTail},${senderPhone},${receiverPhone}`;
-        
-//         const runCobolValidator = () => {
-//             return new Promise((resolve) => {
-//                 exec(`exchangeform.exe "${cobolArgs}"`, (error, stdout, stderr) => {
-//                     if (error) {
-//                         console.error("COBOL Runtime Error:", error);
-//                         resolve({ valid: false, message: "COBOL Validation Engine failed to execute." });
-//                     } else {
-//                         const output = stdout.trim();
-//                         console.log("COBOL Engine Output Log:", output);
-
-//                         if (output.startsWith("SUCCESS")) {
-//                             resolve({ valid: true });
-//                         } else if (output.startsWith("ERROR|")) {
-//                             resolve({ valid: false, message: output.split('|')[1] });
-//                         } else {
-//                             resolve({ valid: false, message: "System metadata validation failed." });
-//                         }
-//                     }
-//                 });
-//             });
-//         };
-
-//         const cobolResult = await runCobolValidator();
-//         if (!cobolResult.valid) {
-//             await connection.rollback();
-//             return res.status(400).json({ success: false, message: cobolResult.message });
-//         }
-
-//         // ─── FEE Rate ───
-//         const feePercentage = currentFeeRate / 100;
-//         const calculatedFee = numericAmount * feePercentage;
-        
-//         // Database Integer Net Amount Math.round 
-//         const netReceiveAmount = Math.round(numericAmount - calculatedFee);
-
-//         await connection.query(
-//             'UPDATE wallets SET current_balance = current_balance + ? WHERE wallet_id = ?',
-//             [numericAmount, fromWallet]
-//         );
-
-//         const insertTxnSql = `
-//             INSERT INTO exchange_transactions 
-//             (user_id, from_wallet, to_wallet, send_amount, receive_amount, txn_id_tail, sender_name, sender_phone, receiver_name, receiver_phone, status) 
-//             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '0')
-//         `;
-
-//         await connection.query(insertTxnSql, [
-//             userId || 1,
-//             fromWallet,
-//             toWallet,
-//             numericAmount,
-//             netReceiveAmount, 
-//             txnIdTail,
-//             senderName || '',
-//             senderPhone,
-//             receiverName || '',
-//             receiverPhone
-//         ]);
-
-//         await connection.commit();
-        
-//         res.json({ 
-//             success: true, 
-//             message: 'Exchange request submitted successfully. Waiting for admin approval (Status: Pending).',
-//             netReceiveAmount: netReceiveAmount
-//         });
-
-//     } catch (error) {
-//         if (connection) await connection.rollback();
-//         console.error('Exchange Submit System Failure Log:', error);
-//         res.status(500).json({ success: false, message: 'Internal Server Error occurred.' });
-//     } finally {
-//         if (connection) connection.release();
-//     }
-// });
-
-// auto 5s
 app.post('/api/exchange/submit', async (req, res) => {
-    console.log("=== Received Exchange Request ===", req.body);
+    console.log("=== Received Request Body ===", req.body);
     
     let connection;
     try {
         const {
-            fromWallet, toWallet, amount, txnIdTail, 
-            senderPhone, receiverPhone, senderName, receiverName, userId
+            fromWallet,
+            toWallet,
+            amount,
+            txnIdTail,
+            senderPhone,
+            receiverPhone,
+            senderName,
+            receiverName,
+            userId
         } = req.body;
 
         if (!fromWallet || !toWallet || !amount || !txnIdTail || !senderPhone || !receiverPhone) {
@@ -472,134 +350,256 @@ app.post('/api/exchange/submit', async (req, res) => {
         connection = await db.promise().getConnection();
         await connection.beginTransaction();
 
-        // 1. Wallets 
         const [wallets] = await connection.query(
-            'SELECT wallet_id, current_balance FROM wallets WHERE wallet_id IN (?, ?)',
+            'SELECT wallet_id, wallet_name, is_active, current_balance FROM wallets WHERE wallet_id IN (?, ?)',
             [fromWallet, toWallet]
         );
 
         const sourceWallet = wallets.find(w => w.wallet_id === fromWallet);
+
         if (!sourceWallet) {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: 'Source wallet not found.' });
+            return res.status(400).json({ success: false, message: 'Source (From) wallet not found in system.' });
         }
 
-        // 2. Fees 
-        const [rateRows] = await connection.query('SELECT fee_rate FROM rates WHERE id = 1');
-        let currentFeeRate = rateRows.length > 0 ? parseInt(rateRows[0].fee_rate, 10) : 2;
-        const numericAmount = parseInt(amount, 10);
-        const netReceiveAmount = Math.round(numericAmount - (numericAmount * (currentFeeRate / 100)));
+        const [rateRows] = await connection.query(
+            'SELECT fee_rate FROM rates WHERE id = 1'
+        );
 
-        // 3. COBOL Validation
-        const cobolArgs = `VALIDATE_TXN,${numericAmount},${sourceWallet.current_balance},${txnIdTail},${senderPhone},${receiverPhone}`;
-        const { exec } = require('child_process');
+        let currentFeeRate = 2; 
+        if (rateRows.length > 0) {
+            currentFeeRate = parseInt(rateRows[0].fee_rate, 10) || 0; 
+        }
+
+        const numericAmount = parseInt(amount, 10);
+        const availableBalance = parseInt(sourceWallet.current_balance, 10) || 0;
+
+        console.log(`[Debug Log] Parsed Integer - Amount: ${numericAmount}, Wallet Balance: ${availableBalance}`);
+
+        const cobolArgs = `VALIDATE_TXN,${numericAmount},${availableBalance},${txnIdTail},${senderPhone},${receiverPhone}`;
         
-        const runCobolValidator = () => new Promise((resolve) => {
-            exec(`exchangeform.exe "${cobolArgs}"`, (err, stdout) => {
-                if (err || !stdout.trim().startsWith("SUCCESS")) resolve({ valid: false });
-                else resolve({ valid: true });
+        const runCobolValidator = () => {
+            return new Promise((resolve) => {
+                exec(`exchangeform.exe "${cobolArgs}"`, (error, stdout, stderr) => {
+                    if (error) {
+                        console.error("COBOL Runtime Error:", error);
+                        resolve({ valid: false, message: "COBOL Validation Engine failed to execute." });
+                    } else {
+                        const output = stdout.trim();
+                        console.log("COBOL Engine Output Log:", output);
+
+                        if (output.startsWith("SUCCESS")) {
+                            resolve({ valid: true });
+                        } else if (output.startsWith("ERROR|")) {
+                            resolve({ valid: false, message: output.split('|')[1] });
+                        } else {
+                            resolve({ valid: false, message: "System metadata validation failed." });
+                        }
+                    }
+                });
             });
-        });
+        };
 
         const cobolResult = await runCobolValidator();
         if (!cobolResult.valid) {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: "Validation Failed" });
+            return res.status(400).json({ success: false, message: cobolResult.message });
         }
 
-        // 4. Transaction Record 
-        const insertTxnSql = `INSERT INTO exchange_transactions 
-            (user_id, from_wallet, to_wallet, send_amount, receive_amount, txn_id_tail, sender_name, sender_phone, receiver_name, receiver_phone, status) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '0')`;
+        // ─── FEE Rate ───
+        const feePercentage = currentFeeRate / 100;
+        const calculatedFee = numericAmount * feePercentage;
         
-        const [result] = await connection.query(insertTxnSql, [
-            userId || 1, fromWallet, toWallet, numericAmount, netReceiveAmount, 
-            txnIdTail, senderName || '', senderPhone, receiverName || '', receiverPhone
-        ]);
-        
-        // ─── From Wallet (ADD)  ───
+        // Database Integer Net Amount Math.round 
+        const netReceiveAmount = Math.round(numericAmount - calculatedFee);
+
         await connection.query(
             'UPDATE wallets SET current_balance = current_balance + ? WHERE wallet_id = ?',
             [numericAmount, fromWallet]
         );
-        
-        const txnIdForApproval = result.insertId;
+
+        const insertTxnSql = `
+            INSERT INTO exchange_transactions 
+            (user_id, from_wallet, to_wallet, send_amount, receive_amount, txn_id_tail, sender_name, sender_phone, receiver_name, receiver_phone, status) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '0')
+        `;
+
+        await connection.query(insertTxnSql, [
+            userId || 1,
+            fromWallet,
+            toWallet,
+            numericAmount,
+            netReceiveAmount, 
+            txnIdTail,
+            senderName || '',
+            senderPhone,
+            receiverName || '',
+            receiverPhone
+        ]);
+
         await connection.commit();
-        connection.release();
-
-        // 5. 5s Auto-Approve Section (To Wallet)
-        setTimeout(async () => {
-            let autoConn;
-            try {
-                autoConn = await db.promise().getConnection();
-                
-                const [targetWallets] = await autoConn.query('SELECT current_balance FROM wallets WHERE wallet_id = ?', [toWallet]);
-                if (targetWallets.length === 0) return;
-
-                const currentTgtBal = parseInt(targetWallets[0].current_balance, 10) || 0;
-                
-                // COBOL SUBTRACT Args (APPROVE command)
-                const settlementArgs = `APPROVE,0,${netReceiveAmount},0,${currentTgtBal}`;
-
-                exec(`settlement.exe "${settlementArgs}"`, async (err, stdout) => {
-                    if (!err && stdout.trim().startsWith("SUCCESS")) {
-                        const parts = stdout.trim().split('|');
-                        const newTgtBal = parseInt(parts[2], 10);
-
-                        // Start transaction for auto-approval updates
-                        await autoConn.beginTransaction();
-
-                        // 1. Update Target Wallet
-                        await autoConn.query('UPDATE wallets SET current_balance = ? WHERE wallet_id = ?', [newTgtBal, toWallet]);
-                        
-                        // 2. Update Transaction Status
-                        await autoConn.query('UPDATE exchange_transactions SET status = "1" WHERE txn_id = ?', [txnIdForApproval]);
-                        
-                        // 3. Update Daily Settlements
-                        const profit = numericAmount - netReceiveAmount;
-                        const today = new Date().toISOString().split('T')[0];
-                        const sqlInsertSettlement = `
-                            INSERT INTO daily_settlements (settlement_date, total_orders, total_cash_in, total_outflow, profit_generated)
-                            VALUES (?, 1, ?, ?, ?)
-                            ON DUPLICATE KEY UPDATE 
-                            total_orders = total_orders + 1,
-                            total_cash_in = total_cash_in + VALUES(total_cash_in),
-                            total_outflow = total_outflow + VALUES(total_outflow),
-                            profit_generated = profit_generated + VALUES(profit_generated)
-                        `;
-                        await autoConn.query(sqlInsertSettlement, [today, numericAmount, netReceiveAmount, profit]);
-
-                        await autoConn.commit();
-                        console.log(`Auto-approved and settled: To Wallet ${toWallet} updated.`);
-                    } else {
-                        console.error("Auto-Approve COBOL Error:", err || stdout);
-                    }
-                    autoConn.release();
-                });
-            } catch (e) {
-                console.error("Auto-Approve Error:", e);
-                if (autoConn) {
-                    await autoConn.rollback();
-                    autoConn.release();
-                }
-            }
-        }, 5000);
-
+        
         res.json({ 
             success: true, 
-            message: 'Exchange request submitted successfully.',
+            message: 'Exchange request submitted successfully. Waiting for admin approval (Status: Pending).',
             netReceiveAmount: netReceiveAmount
         });
 
     } catch (error) {
-        if (connection) {
-            await connection.rollback();
-            connection.release();
-        }
-        console.error('Exchange Submit Error:', error);
-        res.status(500).json({ success: false, message: 'Internal Server Error.' });
+        if (connection) await connection.rollback();
+        console.error('Exchange Submit System Failure Log:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error occurred.' });
+    } finally {
+        if (connection) connection.release();
     }
 });
+
+// auto 5s
+// app.post('/api/exchange/submit', async (req, res) => {
+//     console.log("=== Received Exchange Request ===", req.body);
+    
+//     let connection;
+//     try {
+//         const {
+//             fromWallet, toWallet, amount, txnIdTail, 
+//             senderPhone, receiverPhone, senderName, receiverName, userId
+//         } = req.body;
+
+//         if (!fromWallet || !toWallet || !amount || !txnIdTail || !senderPhone || !receiverPhone) {
+//             return res.status(400).json({ success: false, message: 'Required fields are missing.' });
+//         }
+
+//         connection = await db.promise().getConnection();
+//         await connection.beginTransaction();
+
+//         // 1. Wallets 
+//         const [wallets] = await connection.query(
+//             'SELECT wallet_id, current_balance FROM wallets WHERE wallet_id IN (?, ?)',
+//             [fromWallet, toWallet]
+//         );
+
+//         const sourceWallet = wallets.find(w => w.wallet_id === fromWallet);
+//         if (!sourceWallet) {
+//             await connection.rollback();
+//             return res.status(400).json({ success: false, message: 'Source wallet not found.' });
+//         }
+
+//         // 2. Fees 
+//         const [rateRows] = await connection.query('SELECT fee_rate FROM rates WHERE id = 1');
+//         let currentFeeRate = rateRows.length > 0 ? parseInt(rateRows[0].fee_rate, 10) : 2;
+//         const numericAmount = parseInt(amount, 10);
+//         const netReceiveAmount = Math.round(numericAmount - (numericAmount * (currentFeeRate / 100)));
+
+//         // 3. COBOL Validation
+//         const cobolArgs = `VALIDATE_TXN,${numericAmount},${sourceWallet.current_balance},${txnIdTail},${senderPhone},${receiverPhone}`;
+//         const { exec } = require('child_process');
+        
+//         const runCobolValidator = () => new Promise((resolve) => {
+//             exec(`exchangeform.exe "${cobolArgs}"`, (err, stdout) => {
+//                 if (err || !stdout.trim().startsWith("SUCCESS")) resolve({ valid: false });
+//                 else resolve({ valid: true });
+//             });
+//         });
+
+//         const cobolResult = await runCobolValidator();
+//         if (!cobolResult.valid) {
+//             await connection.rollback();
+//             return res.status(400).json({ success: false, message: "Validation Failed" });
+//         }
+
+//         // 4. Transaction Record 
+//         const insertTxnSql = `INSERT INTO exchange_transactions 
+//             (user_id, from_wallet, to_wallet, send_amount, receive_amount, txn_id_tail, sender_name, sender_phone, receiver_name, receiver_phone, status) 
+//             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '0')`;
+        
+//         const [result] = await connection.query(insertTxnSql, [
+//             userId || 1, fromWallet, toWallet, numericAmount, netReceiveAmount, 
+//             txnIdTail, senderName || '', senderPhone, receiverName || '', receiverPhone
+//         ]);
+        
+//         // ─── From Wallet (ADD)  ───
+//         await connection.query(
+//             'UPDATE wallets SET current_balance = current_balance + ? WHERE wallet_id = ?',
+//             [numericAmount, fromWallet]
+//         );
+        
+//         const txnIdForApproval = result.insertId;
+//         await connection.commit();
+//         connection.release();
+
+//         // 5. 5s Auto-Approve Section (To Wallet)
+//         setTimeout(async () => {
+//             let autoConn;
+//             try {
+//                 autoConn = await db.promise().getConnection();
+                
+//                 const [targetWallets] = await autoConn.query('SELECT current_balance FROM wallets WHERE wallet_id = ?', [toWallet]);
+//                 if (targetWallets.length === 0) return;
+
+//                 const currentTgtBal = parseInt(targetWallets[0].current_balance, 10) || 0;
+                
+//                 // COBOL SUBTRACT Args (APPROVE command)
+//                 const settlementArgs = `APPROVE,0,${netReceiveAmount},0,${currentTgtBal}`;
+
+//                 exec(`settlement.exe "${settlementArgs}"`, async (err, stdout) => {
+//                     if (!err && stdout.trim().startsWith("SUCCESS")) {
+//                         const parts = stdout.trim().split('|');
+//                         const newTgtBal = parseInt(parts[2], 10);
+
+//                         // Start transaction for auto-approval updates
+//                         await autoConn.beginTransaction();
+
+//                         // 1. Update Target Wallet
+//                         await autoConn.query('UPDATE wallets SET current_balance = ? WHERE wallet_id = ?', [newTgtBal, toWallet]);
+                        
+//                         // 2. Update Transaction Status
+//                         await autoConn.query('UPDATE exchange_transactions SET status = "1" WHERE txn_id = ?', [txnIdForApproval]);
+                        
+//                         // 3. Update Daily Settlements
+//                         const profit = numericAmount - netReceiveAmount;
+//                         const today = new Date().toISOString().split('T')[0];
+//                         const sqlInsertSettlement = `
+//                             INSERT INTO daily_settlements (settlement_date, total_orders, total_cash_in, total_outflow, profit_generated)
+//                             VALUES (?, 1, ?, ?, ?)
+//                             ON DUPLICATE KEY UPDATE 
+//                             total_orders = total_orders + 1,
+//                             total_cash_in = total_cash_in + VALUES(total_cash_in),
+//                             total_outflow = total_outflow + VALUES(total_outflow),
+//                             profit_generated = profit_generated + VALUES(profit_generated)
+//                         `;
+//                         await autoConn.query(sqlInsertSettlement, [today, numericAmount, netReceiveAmount, profit]);
+
+//                         await autoConn.commit();
+//                         console.log(`Auto-approved and settled: To Wallet ${toWallet} updated.`);
+//                     } else {
+//                         console.error("Auto-Approve COBOL Error:", err || stdout);
+//                     }
+//                     autoConn.release();
+//                 });
+//             } catch (e) {
+//                 console.error("Auto-Approve Error:", e);
+//                 if (autoConn) {
+//                     await autoConn.rollback();
+//                     autoConn.release();
+//                 }
+//             }
+//         }, 5000);
+
+//         res.json({ 
+//             success: true, 
+//             message: 'Exchange request submitted successfully.',
+//             netReceiveAmount: netReceiveAmount
+//         });
+
+//     } catch (error) {
+//         if (connection) {
+//             await connection.rollback();
+//             connection.release();
+//         }
+//         console.error('Exchange Submit Error:', error);
+//         res.status(500).json({ success: false, message: 'Internal Server Error.' });
+//     }
+// });
 
 app.post('/api/register', async (req, res) => {
     const { name, phone, email, password } = req.body;
